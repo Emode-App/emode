@@ -1,0 +1,10 @@
+{
+    "name": "@emode/database",
+    "version": "0.0.0",
+    "private": true,
+    "main": "./index.ts",
+    "dependencies": {
+        "@supabase/supabase-js": "latest",
+        "@emode/types": "*"
+    }
+}

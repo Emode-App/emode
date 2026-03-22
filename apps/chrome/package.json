@@ -1,0 +1,13 @@
+{
+    "name": "@emode/chrome",
+    "version": "0.0.0",
+    "private": true,
+    "scripts": {
+        "build": "vite build",
+        "dev": "vite"
+    },
+    "devDependencies": {
+        "vite": "latest",
+        "@types/chrome": "latest"
+    }
+}

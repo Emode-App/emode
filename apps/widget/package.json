@@ -1,0 +1,13 @@
+{
+    "name": "@emode/widget",
+    "version": "0.0.0",
+    "private": true,
+    "scripts": {
+        "build": "tsup src/index.ts --format iife --minify --clean",
+        "dev": "tsup src/index.ts --format iife --watch"
+    },
+    "devDependencies": {
+        "tsup": "latest",
+        "typescript": "latest"
+    }
+}

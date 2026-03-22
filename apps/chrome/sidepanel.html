@@ -1,0 +1,316 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>emodeAI | Side Panel</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link
+    href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=Outfit:wght@600;700;800&display=swap"
+    rel="stylesheet">
+  <style>
+    :root {
+      --obsidian: #111111;
+      --off-white: #f8f8f8;
+      --charcoal: #333333;
+      --accent-gold: #c5a059;
+      --purple-gradient: linear-gradient(135deg, #6366f1 0%, #a855f7 100%);
+      --glass-bg: rgba(255, 255, 255, 0.7);
+      --border: rgba(0, 0, 0, 0.05);
+    }
+
+    * {
+      box-sizing: border-box;
+      margin: 0;
+      padding: 0;
+    }
+
+    body {
+      font-family: 'Inter', -apple-system, sans-serif;
+      background-color: var(--off-white);
+      color: var(--obsidian);
+      line-height: 1.5;
+      -webkit-font-smoothing: antialiased;
+    }
+
+    .container {
+      padding: 24px;
+      display: flex;
+      flex-col: column;
+      gap: 24px;
+      min-h-screen: 100vh;
+    }
+
+    header {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      margin-bottom: 8px;
+    }
+
+    .logo {
+      font-family: 'Outfit', sans-serif;
+      font-size: 1.5rem;
+      font-weight: 800;
+      font-style: italic;
+      background: var(--purple-gradient);
+      -webkit-background-clip: text;
+      -webkit-text-fill-color: transparent;
+      letter-spacing: -0.02em;
+    }
+
+    .glass-card {
+      background: var(--glass-bg);
+      backdrop-filter: blur(12px);
+      -webkit-backdrop-filter: blur(12px);
+      border: 1px solid white;
+      border-radius: 24px;
+      padding: 20px;
+      box-shadow: 0 4px 24px rgba(0, 0, 0, 0.04);
+    }
+
+    .usage-section h3 {
+      font-size: 0.65rem;
+      text-transform: uppercase;
+      letter-spacing: 0.15em;
+      color: var(--accent-gold);
+      margin-bottom: 12px;
+      font-weight: 700;
+    }
+
+    .usage-bar {
+      height: 6px;
+      background: rgba(0, 0, 0, 0.05);
+      border-radius: 3px;
+      overflow: hidden;
+      margin-bottom: 8px;
+    }
+
+    .usage-progress {
+      height: 100%;
+      background: var(--purple-gradient);
+      width: 40%;
+      transition: width 0.5s ease;
+    }
+
+    .usage-text {
+      display: flex;
+      justify-content: space-between;
+      font-size: 0.75rem;
+      font-weight: 600;
+      color: rgba(0, 0, 0, 0.4);
+    }
+
+    .active-product-label {
+      font-size: 0.75rem;
+      font-weight: 700;
+      text-transform: uppercase;
+      letter-spacing: 0.1em;
+      margin-bottom: 16px;
+      display: flex;
+      align-items: center;
+      gap: 8px;
+    }
+
+    .active-product-card {
+      display: flex;
+      gap: 16px;
+      align-items: center;
+      background: white;
+      border: 1px solid var(--border);
+      padding: 12px;
+      border-radius: 16px;
+    }
+
+    .product-img {
+      width: 60px;
+      height: 75px;
+      background: var(--off-white);
+      border-radius: 8px;
+      object-fit: cover;
+    }
+
+    .product-info h4 {
+      font-size: 0.9rem;
+      font-weight: 700;
+      margin-bottom: 2px;
+    }
+
+    .product-info p {
+      font-size: 0.8rem;
+      color: rgba(0, 0, 0, 0.5);
+      font-weight: 500;
+    }
+
+    .btn-try-on {
+      width: 100%;
+      background: var(--purple-gradient);
+      color: white;
+      border: none;
+      padding: 14px;
+      border-radius: 12px;
+      font-weight: 700;
+      letter-spacing: 0.05em;
+      text-transform: uppercase;
+      font-size: 0.75rem;
+      cursor: pointer;
+      margin-top: 16px;
+      transition: transform 0.2s;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      gap: 8px;
+    }
+
+    .btn-try-on:hover {
+      transform: translateY(-2px);
+    }
+
+    .section-header {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      margin-top: 12px;
+      margin-bottom: 16px;
+    }
+
+    .section-title {
+      font-size: 1.1rem;
+      font-weight: 800;
+      font-family: 'Outfit', sans-serif;
+      letter-spacing: -0.01em;
+    }
+
+    .grid-wardrobe {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 12px;
+    }
+
+    .wardrobe-item {
+      aspect-ratio: 3/4;
+      background: white;
+      border-radius: 16px;
+      border: 1px solid var(--border);
+      overflow: hidden;
+      position: relative;
+    }
+
+    .wardrobe-item img {
+      width: 100%;
+      height: 100%;
+      object-fit: cover;
+    }
+
+    .wardrobe-item::after {
+      content: '';
+      position: absolute;
+      inset: 0;
+      background: linear-gradient(to top, rgba(0, 0, 0, 0.4), transparent);
+      opacity: 0;
+      transition: opacity 0.3s;
+    }
+
+    .wardrobe-item:hover::after {
+      opacity: 1;
+    }
+
+    .empty-state {
+      grid-column: span 2;
+      text-align: center;
+      padding: 40px 20px;
+      color: rgba(0, 0, 0, 0.3);
+      font-size: 0.8rem;
+      font-weight: 500;
+      background: white;
+      border-radius: 20px;
+      border: 1px dashed var(--border);
+    }
+
+    .footer {
+      margin-top: auto;
+      padding-top: 24px;
+      text-align: center;
+    }
+
+    .powered-by {
+      font-size: 0.6rem;
+      font-weight: 700;
+      text-transform: uppercase;
+      letter-spacing: 0.15em;
+      color: rgba(0, 0, 0, 0.2);
+    }
+  </style>
+</head>
+
+<body style="padding: 24px;">
+  <header>
+    <div class="logo">emodeAI</div>
+    <div style="width: 32px; height: 32px; border-radius: 50%; background: #eee; overflow: hidden;">
+      <img src="https://ui-avatars.com/api/?name=User&background=6366f1&color=fff" style="width: 100%; height: 100%;" />
+    </div>
+  </header>
+
+  <div class="glass-card usage-section" style="margin-top: 24px; margin-bottom: 32px;">
+    <h3>Daily Generations</h3>
+    <div class="usage-bar">
+      <div id="usage-progress" class="usage-progress" style="width: 40%;"></div>
+    </div>
+    <div class="usage-text">
+      <span id="usage-count">2 / 5</span>
+      <span>Refreshes in 14h</span>
+    </div>
+  </div>
+
+  <div id="active-product-container">
+    <div class="active-product-label">
+      <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3"
+        stroke-linecap="round" stroke-linejoin="round" style="color: var(--accent-gold);">
+        <circle cx="12" cy="12" r="10" />
+        <path d="m12 16 4-4-4-4" />
+        <path d="M8 12h8" />
+      </svg>
+      Active Product
+    </div>
+    <div class="active-product-card glass-card" style="padding: 12px; border-radius: 16px;">
+      <img id="active-product-img"
+        src="https://images.unsplash.com/photo-1591047139829-d91aecb6caea?q=80&w=400&h=600&auto=format&fit=crop"
+        class="product-img" />
+      <div class="product-info">
+        <h4 id="active-product-title">Midnight Blazer</h4>
+        <p id="active-product-price">Waiting for detection...</p>
+      </div>
+    </div>
+    <button id="btn-try-on" class="btn-try-on">
+      <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"
+        stroke-linecap="round" stroke-linejoin="round">
+        <path
+          d="M21 16V8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73l7 4a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16z" />
+        <polyline points="3.27 6.96 12 12.01 20.73 6.96" />
+        <line x1="12" y1="22.08" x2="12" y2="12" />
+      </svg>
+      Start Virtual Try-On
+    </button>
+  </div>
+
+  <div class="section-header" style="margin-top: 40px;">
+    <h2 class="section-title">Your Wardrobe</h2>
+  </div>
+
+  <div id="wardrobe-grid" class="grid-wardrobe">
+    <div class="empty-state">
+      No styles generated yet.<br />
+      Found a look you like? Try it on above.
+    </div>
+  </div>
+
+  <div class="footer">
+    <p class="powered-by">Powered by Nano Banana Pro AI</p>
+  </div>
+
+  <script src="sidepanel.js"></script>
+</body>
+
+</html>

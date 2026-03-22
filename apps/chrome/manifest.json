@@ -1,0 +1,34 @@
+{
+    "manifest_version": 3,
+    "name": "emodeAI | Universal Virtual Try-On",
+    "version": "1.0.0",
+    "description": "Try on clothing across any website with AI.",
+    "permissions": [
+        "sidePanel",
+        "storage",
+        "activeTab",
+        "scripting"
+    ],
+    "host_permissions": [
+        "<all_urls>"
+    ],
+    "action": {
+        "default_title": "Open emodeAI"
+    },
+    "side_panel": {
+        "default_path": "sidepanel.html"
+    },
+    "content_scripts": [
+        {
+            "matches": [
+                "<all_urls>"
+            ],
+            "js": [
+                "content.js"
+            ]
+        }
+    ],
+    "background": {
+        "service_worker": "background.js"
+    }
+}
