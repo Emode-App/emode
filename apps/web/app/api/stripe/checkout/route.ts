@@ -5,71 +5,7 @@ const stripe = new Stripe(process.env.STRIPE_SECRET_KEY!, {
     apiVersion: '2023-10-16' as any,
 });
 
-// Plan configuration matching pricing.md
-const PLAN_CONFIG: Record<string, {
-    name: string;
-    priceInCents: number;
-    mode: 'subscription' | 'payment';
-    interval?: 'month';
-    dailyLimit: number;
-    unlimited: boolean;
-    marketplaceAccess: boolean;
-}> = {
-    starter: {
-        name: 'Starter',
-        priceInCents: 2900,
-        mode: 'subscription',
-        interval: 'month',
-        dailyLimit: 50,
-        unlimited: false,
-        marketplaceAccess: false,
-    },
-    pro: {
-        name: 'Pro',
-        priceInCents: 7900,
-        mode: 'subscription',
-        interval: 'month',
-        dailyLimit: 200,
-        unlimited: false,
-        marketplaceAccess: true,
-    },
-    growth: {
-        name: 'Growth',
-        priceInCents: 14900,
-        mode: 'subscription',
-        interval: 'month',
-        dailyLimit: 0,
-        unlimited: true,
-        marketplaceAccess: true,
-    },
-    lifetime_starter: {
-        name: 'Lifetime Starter',
-        priceInCents: 29900,
-        mode: 'payment',
-        dailyLimit: 50,
-        unlimited: false,
-        marketplaceAccess: false,
-    },
-    lifetime_pro: {
-        name: 'Lifetime Pro',
-        priceInCents: 79900,
-        mode: 'payment',
-        dailyLimit: 200,
-        unlimited: false,
-        marketplaceAccess: true,
-    },
-    lifetime_founder: {
-        name: 'Lifetime Founder',
-        priceInCents: 149900,
-        mode: 'payment',
-        dailyLimit: 0,
-        unlimited: true,
-        marketplaceAccess: true,
-    },
-};
-
-// Export for use by webhook
-export { PLAN_CONFIG };
+import { PLAN_CONFIG } from '../../../../lib/stripe-plan-config';
 
 export async function POST(request: Request) {
     try {
@@ -86,11 +22,8 @@ export async function POST(request: Request) {
         const session = await stripe.checkout.sessions.create({
             mode: planConfig.mode,
             payment_method_types: ['card'],
-            customer_creation: 'always',
-            // Require email so we can link merchant to Supabase user
-            ...(planConfig.mode === 'subscription'
-                ? {}
-                : { customer_email: undefined }),
+            // customer_creation is only valid in payment mode; subscription mode always creates a customer
+            ...(planConfig.mode === 'payment' ? { customer_creation: 'always' } : {}),
             line_items: [
                 {
                     price_data: {

@@ -1,6 +1,8 @@
 'use client';
 
 import { Navbar } from '../components/Navbar';
+import { Footer } from '../components/Footer';
+import Link from 'next/link';
 import { Hero } from '../components/Hero';
 import { Sparkles, Zap, Shield, Globe, Check, X, ArrowRight, ShoppingCart, Plus } from 'lucide-react';
 import { useState } from 'react';
@@ -157,13 +159,13 @@ export default function Home() {
                             <p className="text-charcoal/60 text-sm leading-relaxed mb-8">Try on clothing across any website with AI directly in your browser.</p>
                             <a href="#" className="inline-flex items-center gap-2 text-sm font-bold tracking-widest uppercase hover:gap-4 transition-all">Chrome Web Store <ArrowRight className="w-4 h-4" /></a>
                         </div>
-                        <div className="p-10 bg-off-white rounded-[32px] border border-black/5 hover:shadow-xl transition-all group opacity-50">
-                            <div className="w-16 h-16 bg-white rounded-2xl flex items-center justify-center mb-8 shadow-sm">
+                        <div className="p-10 bg-off-white rounded-[32px] border border-black/5 hover:shadow-xl transition-all group">
+                            <div className="w-16 h-16 bg-white rounded-2xl flex items-center justify-center mb-8 shadow-sm group-hover:bg-purple-gradient group-hover:text-white transition-colors">
                                 <Plus className="w-8 h-8" />
                             </div>
                             <h3 className="text-2xl font-heading font-bold mb-4">Embedded Widget</h3>
                             <p className="text-charcoal/60 text-sm leading-relaxed mb-8">Customizable JS injection for direct deployment. Restricted to Growth plans.</p>
-                            <span className="text-[10px] font-bold tracking-widest uppercase text-accent-gold">Subscriber Exclusive</span>
+                            <a href="#pricing" className="inline-flex items-center gap-2 text-sm font-bold tracking-widest uppercase hover:gap-4 transition-all text-accent-gold">View Plans <ArrowRight className="w-4 h-4" /></a>
                         </div>
                     </div>
                 </div>
@@ -250,20 +252,7 @@ export default function Home() {
                 </div>
             </section>
 
-            <footer className="py-20 border-t border-black/5">
-                <div className="max-w-7xl mx-auto px-6 flex flex-col md:flex-row justify-between items-center gap-10">
-                    <div className="text-2xl font-heading font-bold italic pr-4">emodeAI</div>
-                    <div className="flex gap-10 text-sm font-medium text-charcoal/50">
-                        <a href="#" className="hover:text-black">Privacy</a>
-                        <a href="#" className="hover:text-black">Terms</a>
-                        <a href="#" className="hover:text-black">API Docs</a>
-                        <a href="#" className="hover:text-black">Contact</a>
-                    </div>
-                    <div className="text-sm text-charcoal/30 font-medium">
-                        © 2025 emodeAI. All rights reserved.
-                    </div>
-                </div>
-            </footer>
+            <Footer />
         </div>
     );
 }

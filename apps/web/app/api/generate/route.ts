@@ -18,8 +18,11 @@ export async function OPTIONS() {
     return NextResponse.json({}, { headers: corsHeaders });
 }
 
-async function checkEntitlement(merchantId: string): Promise<{ allowed: boolean; error?: string }> {
-    if (!merchantId) return { allowed: true }; // No merchant = open access (for now)
+async function checkEntitlement(merchantId: string): Promise<{ allowed: boolean; error?: string; status?: number }> {
+    if (!merchantId) return { allowed: false, error: 'Missing or inactive merchant ID.', status: 401 };
+    
+    // Exception for the landing page interactive demo
+    if (merchantId === 'demo_hero_interactive') return { allowed: true };
 
     // 1. Get merchant's entitlement
     const { data: entitlement } = await supabase
@@ -32,7 +35,7 @@ async function checkEntitlement(merchantId: string): Promise<{ allowed: boolean;
         .single();
 
     if (!entitlement) {
-        return { allowed: false, error: 'No active plan found. Please subscribe at emode.app' };
+        return { allowed: false, error: 'No active plan found. Please subscribe at emode.app', status: 401 };
     }
 
     // Unlimited plan — always allowed
@@ -53,7 +56,8 @@ async function checkEntitlement(merchantId: string): Promise<{ allowed: boolean;
     if (used >= entitlement.daily_generation_limit) {
         return {
             allowed: false,
-            error: `Daily limit reached (${used}/${entitlement.daily_generation_limit}). Resets at midnight UTC.`
+            error: `Daily limit reached (${used}/${entitlement.daily_generation_limit}). Resets at midnight UTC.`,
+            status: 429
         };
     }
 
@@ -109,7 +113,7 @@ export async function POST(request: Request) {
         if (!entitlementCheck.allowed) {
             return NextResponse.json(
                 { error: entitlementCheck.error },
-                { status: 429, headers: corsHeaders }
+                { status: entitlementCheck.status || 429, headers: corsHeaders }
             );
         }
 

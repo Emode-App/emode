@@ -5,6 +5,7 @@ import { useSearchParams } from 'next/navigation';
 import { supabase } from '@emode/database';
 import { Check, Copy, Sparkles, ArrowRight, Store } from 'lucide-react';
 import Link from 'next/link';
+import { WidgetInstallCode } from '../components/WidgetInstallCode';
 
 export default function OnboardingPage() {
     const searchParams = useSearchParams();
@@ -156,16 +157,8 @@ export default function OnboardingPage() {
             </p>
 
             {/* Code Block */}
-            <div className="relative bg-obsidian rounded-2xl p-6 mb-8 group">
-                <pre className="text-green-400 text-sm font-mono overflow-x-auto whitespace-pre-wrap break-all">
-                    {widgetCode}
-                </pre>
-                <button
-                    onClick={handleCopy}
-                    className="absolute top-4 right-4 px-4 py-2 bg-white/10 hover:bg-white/20 rounded-lg text-white text-xs font-bold uppercase tracking-widest transition-all flex items-center gap-2"
-                >
-                    {copied ? <><Check className="w-3 h-3" /> Copied</> : <><Copy className="w-3 h-3" /> Copy</>}
-                </button>
+            <div className="mb-8">
+                <WidgetInstallCode merchantId={merchantId || ''} />
             </div>
 
             {/* Platform Instructions */}

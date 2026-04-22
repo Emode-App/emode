@@ -1,48 +1,6 @@
 import { BarChart3, Users, Package, Zap, RefreshCw, Crown } from 'lucide-react';
-import { cookies } from 'next/headers';
-import { createClient } from '@supabase/supabase-js';
-
-// Service role client for unrestricted queries
-const serviceClient = createClient(
-    process.env.NEXT_PUBLIC_SUPABASE_URL!,
-    process.env.SUPABASE_SERVICE_ROLE_KEY || process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!
-);
-
-async function getMerchantForUser() {
-    // Try to get the logged-in user
-    const supabase = createClient(
-        process.env.NEXT_PUBLIC_SUPABASE_URL!,
-        process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!,
-        {
-            global: {
-                headers: {
-                    cookie: (await cookies()).toString(),
-                },
-            },
-        }
-    );
-
-    const { data: { user } } = await supabase.auth.getUser();
-    if (!user) return null;
-
-    // Find merchant by owner_user_id
-    const { data: merchant } = await serviceClient
-        .from('merchants')
-        .select('*')
-        .eq('owner_user_id', user.id)
-        .single();
-
-    if (merchant) return merchant;
-
-    // Fallback: find by email
-    const { data: merchantByEmail } = await serviceClient
-        .from('merchants')
-        .select('*')
-        .eq('shop_domain', user.email || '')
-        .single();
-
-    return merchantByEmail;
-}
+import { getMerchantForUser, serviceClient } from './admin-util';
+import { WidgetInstallCode } from './components/WidgetInstallCode';
 
 async function getStats(merchantId?: string) {
     // Build queries — filter by merchant if available
@@ -156,14 +114,8 @@ export default async function AdminDashboard() {
 
             {/* Merchant ID for widget install */}
             {merchant && (
-                <div className="mb-8 p-4 bg-purple-50 border border-purple-200 rounded-xl flex items-center justify-between">
-                    <div>
-                        <p className="text-xs font-bold uppercase tracking-widest text-purple-600 mb-1">Merchant ID</p>
-                        <code className="text-sm font-mono text-purple-800">{merchant.id}</code>
-                    </div>
-                    <a href="/admin/install" className="text-sm font-bold text-purple-600 hover:text-purple-800 underline">
-                        Get Widget Code →
-                    </a>
+                <div className="flex justify-center w-full mb-12">
+                    <WidgetInstallCode merchantId={merchant.id} />
                 </div>
             )}
 

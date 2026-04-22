@@ -1,8 +1,10 @@
 import Link from 'next/link';
-import { cookies } from 'next/headers';
+import { cookies, headers } from 'next/headers';
 import { createClient } from '@supabase/supabase-js';
 import { redirect } from 'next/navigation';
 import { LayoutDashboard, Package, Users, BarChart3, Settings, LogOut, Code2 } from 'lucide-react';
+
+export const dynamic = 'force-dynamic';
 
 export default async function AdminLayout({
     children,
@@ -26,7 +28,12 @@ export default async function AdminLayout({
 
     // Allow onboarding page without auth (they just paid, may not be logged in yet)
     // For all other admin pages, require authentication
-    // Note: we skip the redirect for onboarding to avoid blocking post-checkout flow
+    const headersList = await headers();
+    const currentPath = headersList.get('x-invoke-path') || '';
+    
+    if (!user && !currentPath.includes('/admin/onboarding')) {
+        redirect('/login');
+    }
 
     return (
         <div className="min-h-screen bg-off-white flex">
@@ -42,9 +49,6 @@ export default async function AdminLayout({
                     </Link>
                     <Link href="/admin/install" className="flex items-center gap-3 px-4 py-3 hover:bg-white/5 rounded-lg text-sm font-medium transition-colors">
                         <Code2 className="w-4 h-4" /> Install Widget
-                    </Link>
-                    <Link href="/admin/merchants" className="flex items-center gap-3 px-4 py-3 hover:bg-white/5 rounded-lg text-sm font-medium transition-colors">
-                        <Users className="w-4 h-4" /> Merchants
                     </Link>
                     <Link href="/admin/analytics" className="flex items-center gap-3 px-4 py-3 hover:bg-white/5 rounded-lg text-sm font-medium transition-colors">
                         <BarChart3 className="w-4 h-4" /> Analytics

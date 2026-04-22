@@ -36,3 +36,9 @@ CREATE POLICY "Merchant owners can view merchant entitlements"
             SELECT id FROM merchants WHERE owner_user_id = auth.uid()
         )
     );
+
+-- ============================================================
+-- USAGE COUNTERS: Allow tracking for merchants
+-- ============================================================
+ALTER TABLE usage_counters DROP CONSTRAINT IF EXISTS usage_counters_subject_type_check;
+ALTER TABLE usage_counters ADD CONSTRAINT usage_counters_subject_type_check CHECK (subject_type IN ('user', 'merchant'));

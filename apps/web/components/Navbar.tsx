@@ -13,17 +13,19 @@ export const Navbar = () => {
             <div className="relative flex items-center justify-between w-full max-w-7xl">
                 {/* Left: Logo */}
                 <div className="flex items-center z-10">
-                    <span className="text-2xl font-heading font-bold bg-purple-gradient bg-clip-text text-transparent italic pr-4">
-                        emodeAI
-                    </span>
+                    <Link href="/">
+                        <span className="text-2xl font-heading font-bold bg-purple-gradient bg-clip-text text-transparent italic pr-4 hover:opacity-80 transition-opacity cursor-pointer block">
+                            emodeAI
+                        </span>
+                    </Link>
                 </div>
 
                 {/* Center: Navigation Links - Absolutely Centered */}
                 <div className="absolute inset-0 hidden md:flex items-center justify-center pointer-events-none">
                     <div className="flex items-center gap-8 font-medium pointer-events-auto">
                         <Link href="/marketplace" className="hover:text-accent-gold transition-colors">Marketplace</Link>
-                        <Link href="#extensions" className="hover:text-accent-gold transition-colors">Extensions</Link>
-                        <Link href="#pricing" className="hover:text-accent-gold transition-colors">Pricing</Link>
+                        <Link href="/#extensions" className="hover:text-accent-gold transition-colors">Extensions</Link>
+                        <Link href="/#pricing" className="hover:text-accent-gold transition-colors">Pricing</Link>
                     </div>
                 </div>
 
