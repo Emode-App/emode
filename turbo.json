@@ -8,7 +8,12 @@
             "dependsOn": [
                 "^build"
             ],
-            "//": "Turborepo only passes through env vars declared here. Anything set in Vercel but missing from this list is undefined at build time, which is how a fully-configured project still fails with 'Neither apiKey nor config.authenticator provided'. NEXT_PUBLIC_* would be picked up by framework inference, but they are listed explicitly so the build hash tracks them too.",
+            // Turborepo only forwards env vars declared here. Anything set in
+            // Vercel but missing from this list arrives undefined at build
+            // time — that is how a correctly-configured project still fails
+            // with "Neither apiKey nor config.authenticator provided".
+            // NEXT_PUBLIC_* would come through via framework inference, but is
+            // listed explicitly so the build hash tracks it too.
             "env": [
                 "GOOGLE_API_KEY",
                 "NEXT_PUBLIC_SUPABASE_URL",
