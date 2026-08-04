@@ -18,19 +18,112 @@ import { supabase } from "../supabase.server";
 // Shopify billing plan names → emode entitlement limits (mirrors
 // apps/web/lib/stripe-plan-config.ts — keep in sync if plans change)
 const PLAN_LIMITS = {
-  starter: { dailyLimit: 50, unlimited: false },
-  pro: { dailyLimit: 200, unlimited: false },
-  growth: { dailyLimit: 0, unlimited: true },
+  starter: { dailyLimit: 50, unlimited: false, marketplace: false },
+  pro: { dailyLimit: 200, unlimited: false, marketplace: true },
+  growth: { dailyLimit: 0, unlimited: true, marketplace: true },
 };
+
+// Shopify has no notion of emode's marketplace categories, so derive one from
+// productType (falling back to the title). Without this every product syncs as
+// 'uncategorized' and all six marketplace category filters return nothing.
+// Order matters: outerwear is tested before tops so "Denim Jacket" does not
+// match a generic top rule.
+const CATEGORY_RULES = [
+  [/jacket|coat|bomber|blazer|parka|outerwear|vest|puffer/i, "outerwear"],
+  [/dress|gown/i, "dresses"],
+  [/pant|trouser|jean|short|skirt|legging|chino/i, "bottoms"],
+  [/shoe|sneaker|boot|heel|sandal|loafer/i, "shoes"],
+  [/hat|cap|bag|belt|scarf|glove|sock|jewel|accessor/i, "accessories"],
+  [/shirt|tee|top|blouse|sweater|hoodie|knit|cardigan/i, "tops"],
+];
+
+function categoryFor(productType, title) {
+  const haystack = `${productType || ""} ${title || ""}`;
+  for (const [pattern, category] of CATEGORY_RULES) {
+    if (pattern.test(haystack)) return category;
+  }
+  return "uncategorized";
+}
+
+// Give the merchant an emode account keyed to their shop email and link it to
+// the merchant row. Without owner_user_id, getMerchantForUser() in the web app
+// can never resolve a Shopify merchant, so the admin dashboard shows the
+// "no merchant account linked" state forever.
+//
+// The account is created pre-confirmed and passwordless: emode signs in with a
+// magic link, so the merchant just enters this same email at /login.
+async function linkMerchantAccount(admin, merchant) {
+  if (merchant.owner_user_id) return merchant;
+
+  let shopProfile = {};
+  try {
+    const res = await admin.graphql(`{ shop { name email } }`);
+    shopProfile = (await res.json())?.data?.shop || {};
+  } catch (err) {
+    console.error("[emode] Could not read shop profile:", err);
+    return merchant;
+  }
+
+  const email = shopProfile.email;
+  if (!email) {
+    console.warn("[emode] Shop has no email; cannot auto-create an emode account.");
+    return merchant;
+  }
+
+  let userId = null;
+  const { data: created, error: createError } = await supabase.auth.admin.createUser({
+    email,
+    email_confirm: true,
+  });
+
+  if (created?.user) {
+    userId = created.user.id;
+  } else {
+    // Already registered (they may have signed up on emode.app first). The
+    // admin API has no lookup-by-email, so scan. Paginated at 1000 to stay
+    // correct past the 50-row default page.
+    const { data: list } = await supabase.auth.admin.listUsers({ page: 1, perPage: 1000 });
+    const match = (list?.users || []).find(
+      (u) => u.email?.toLowerCase() === email.toLowerCase()
+    );
+    if (match) userId = match.id;
+    else {
+      console.error("[emode] Could not create or find user for", email, createError);
+      return merchant;
+    }
+  }
+
+  const brandName = shopProfile.name || merchant.shop_domain;
+  const brandSlug = String(brandName)
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, "-")
+    .replace(/^-+|-+$/g, "");
+
+  const { data: updated } = await supabase
+    .from("merchants")
+    .update({
+      owner_user_id: userId,
+      brand_name: merchant.brand_name || brandName,
+      // brand_slug is UNIQUE and powers /marketplace/[brand]; suffix with the
+      // shop prefix so two stores with the same name cannot collide.
+      brand_slug: merchant.brand_slug || `${brandSlug}-${merchant.shop_domain.split(".")[0].slice(0, 8)}`,
+    })
+    .eq("id", merchant.id)
+    .select()
+    .single();
+
+  console.log(`[emode] Linked ${merchant.shop_domain} to emode account ${email}`);
+  return updated || merchant;
+}
 
 // One-time catalog pull so the merchant's dashboard isn't empty and the
 // marketplace has real product data. Runs only when the merchant has no
 // products in Supabase yet.
-async function syncProducts(admin, merchant, shop) {
+async function syncProducts(admin, merchant, shop, marketplaceVisible) {
   try {
     const response = await admin.graphql(`
       { products(first: 50) { edges { node {
-          id title handle onlineStoreUrl
+          id title handle onlineStoreUrl productType
           featuredImage { url }
           variants(first: 1) { edges { node { id price } } }
       } } } }`);
@@ -58,6 +151,13 @@ async function syncProducts(admin, merchant, shop) {
           handle: node.handle,
           primary_image_url: node.featuredImage?.url || null,
           buy_url: node.onlineStoreUrl || `https://${shop}/products/${node.handle}`,
+          category: categoryFor(node.productType, node.title),
+          // The marketplace query filters on this. Left at its default of
+          // false, a synced product can never surface there.
+          marketplace_visible: marketplaceVisible,
+          // Surfaced as a warning in the merchant dashboard: a product with no
+          // image cannot be generated against.
+          image_quality_status: node.featuredImage?.url ? "ok" : "warning",
         })
         .select("id")
         .single();
@@ -160,24 +260,42 @@ export const loader = async ({ request }) => {
           renews_at: new Date(Date.now() + 30 * 24 * 60 * 60 * 1000).toISOString(),
         },
       ]);
+
+      // Marketplace access is plan-gated, so already-synced products have to be
+      // re-flagged on any plan change — otherwise upgrading to Pro grants the
+      // entitlement but the catalog stays invisible in the marketplace.
+      await supabase
+        .from("products")
+        .update({ marketplace_visible: limits.marketplace })
+        .eq("merchant_id", merchant.id);
     }
 
-    // 5. First-run product catalog sync
+    // 5. Give the merchant an emode account so the web admin dashboard can
+    // find them. Runs once — linkMerchantAccount short-circuits if already set.
+    merchant = await linkMerchantAccount(admin, merchant);
+
+    // 6. First-run product catalog sync
     const { count } = await supabase
       .from("products")
       .select("*", { count: "exact", head: true })
       .eq("merchant_id", merchant.id);
     productCount = count || 0;
     if (productCount === 0) {
-      productCount = await syncProducts(admin, merchant, shop);
+      productCount = await syncProducts(admin, merchant, shop, limits.marketplace);
     }
   }
 
-  return { merchant, activePlan, productCount };
+  return {
+    merchant,
+    activePlan,
+    productCount,
+    // Shown so the merchant knows which email opens their emode dashboard.
+    ownerLinked: Boolean(merchant?.owner_user_id),
+  };
 };
 
 export default function Index() {
-  const { merchant, activePlan, productCount } = useLoaderData();
+  const { merchant, activePlan, productCount, ownerLinked } = useLoaderData();
 
   return (
     <Page>
@@ -202,6 +320,16 @@ export default function Index() {
                     ? `${productCount} products synced to emode.`
                     : "No products synced yet — they'll sync automatically on next load."}
                 </Text>
+                {ownerLinked && (
+                  <Box paddingBlockStart="200">
+                    <Text variant="bodyMd" as="p" tone="subdued">
+                      Full try-on analytics live in your emode dashboard. Sign in
+                      at <b>emode.app/login</b> with this store&apos;s contact email —
+                      we&apos;ve already created the account, and it signs in by
+                      magic link, so there&apos;s no password to set.
+                    </Text>
+                  </Box>
+                )}
               </BlockStack>
             </Card>
           </Layout.Section>
