@@ -2,7 +2,9 @@
 // sites, so it cannot read env vars at runtime — the value is baked in at build
 // time. Mirror any change in apps/web/lib/site.ts and rebuild with
 // `npm run build` in apps/widget (which also copies to apps/web/public).
-const EMODE_ORIGIN = 'https://emode.style';
+// www, not the apex: the apex 308-redirects, and a redirect on a CORS
+// preflight is a fatal error in browsers, so cross-origin POSTs would fail.
+const EMODE_ORIGIN = 'https://www.emode.style';
 
 interface WidgetConfig {
     merchantId: string;

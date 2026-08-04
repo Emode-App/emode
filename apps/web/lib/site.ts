@@ -6,11 +6,16 @@
  * turned out to belong to someone else, and finding every copy was its own
  * small archaeology project — so anything user-facing should read from here.
  *
+ * Must be the CANONICAL host, i.e. www. The apex 308-redirects to it, and
+ * browsers treat a redirect on a CORS preflight as a fatal error — so any
+ * cross-origin POST (the theme extension's impression logging, the widget)
+ * fails silently if this points at the apex.
+ *
  * Set NEXT_PUBLIC_EMODE_URL in the environment to override (no trailing slash).
  * It is NEXT_PUBLIC_ because client components render install snippets with it.
  */
 export const SITE_URL = (
-    process.env.NEXT_PUBLIC_EMODE_URL || 'https://emode.style'
+    process.env.NEXT_PUBLIC_EMODE_URL || 'https://www.emode.style'
 ).replace(/\/+$/, '');
 
 /** Bare host, for copy that reads better without the scheme ("emode.style/login"). */

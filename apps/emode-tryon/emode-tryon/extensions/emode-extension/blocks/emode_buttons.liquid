@@ -126,7 +126,7 @@
 <script>
 (function() {
   // ── Config ──
-  var EMODE_HOST = '{{ block.settings.emode_host | default: "https://emode.style" }}';
+  var EMODE_HOST = '{{ block.settings.emode_host | default: "https://www.emode.style" }}';
   var SHOP_DOMAIN = '{{ shop.permanent_domain }}';
   var PRODUCT_ID = '{{ product.id }}';
 
@@ -413,8 +413,8 @@
       "type": "text",
       "id": "emode_host",
       "label": "Emode App URL",
-      "default": "https://emode.style",
-      "info": "The URL of your emodeAI instance. Change to localhost:3000 for development."
+      "default": "https://www.emode.style",
+      "info": "Must be the canonical host (www). The apex redirects, and browsers treat a redirect on a CORS preflight as a fatal error — analytics calls would fail silently."
     }
   ]
 }
