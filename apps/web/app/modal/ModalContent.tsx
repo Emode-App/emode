@@ -217,7 +217,7 @@ export function ModalContent({ initialProduct, onClose }: ModalContentProps) {
             // blocked the insert anyway.
         } catch (err: any) {
             console.error(err);
-            setError(err.message || 'Nano Banana Pro encountered a fabric drape error. Please try again.');
+            setError(err.message || 'emode could not generate this look. Please try again.');
         } finally {
             setGenerating(false);
         }
@@ -396,7 +396,7 @@ export function ModalContent({ initialProduct, onClose }: ModalContentProps) {
                                                 {converting ? 'PREPARING IMAGE' : 'GENERATING STYLE'}
                                             </h2>
                                             <p className="text-white/50 text-sm italic font-medium">
-                                                {converting ? 'Converting high-fidelity format...' : 'Nano Banana Pro is processing your fabric drape...'}
+                                                {converting ? 'Converting high-fidelity format...' : 'emode is processing your fabric drape...'}
                                             </p>
                                         </div>
                                     )}
@@ -472,7 +472,7 @@ export function ModalContent({ initialProduct, onClose }: ModalContentProps) {
                             )}
 
                             <div className="pt-8 border-t border-black/5 text-center">
-                                <p className="text-[10px] uppercase tracking-widest text-charcoal/30 font-bold mb-4">Powered by Nano Banana Pro AI</p>
+                                <p className="text-[10px] uppercase tracking-widest text-charcoal/30 font-bold mb-4">Powered by emode AI</p>
                                 <div className="flex justify-center gap-4 grayscale opacity-30">
                                     <Plus className="w-5 h-5" />
                                     <Upload className="w-5 h-5" />
