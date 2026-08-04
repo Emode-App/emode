@@ -3,9 +3,19 @@ import Stripe from 'stripe';
 import { createClient } from '@supabase/supabase-js';
 import { PLAN_CONFIG } from '../../../../lib/stripe-plan-config';
 
-const stripe = new Stripe(process.env.STRIPE_SECRET_KEY!, {
-    apiVersion: '2023-10-16' as any,
-});
+// Lazy for the same reason as the checkout route: `next build` imports this
+// module to collect page data, and a module-scope `new Stripe(undefined)`
+// would throw and fail the build.
+let _stripe: Stripe | null = null;
+function stripe(): Stripe {
+    if (!_stripe) {
+        const key = process.env.STRIPE_SECRET_KEY;
+        if (!key) throw new Error('STRIPE_SECRET_KEY is not configured.');
+        _stripe = new Stripe(key, { apiVersion: '2023-10-16' as any });
+    }
+    return _stripe;
+}
+
 const supabase = createClient(
     process.env.NEXT_PUBLIC_SUPABASE_URL!,
     process.env.SUPABASE_SERVICE_ROLE_KEY || process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!
@@ -29,7 +39,7 @@ export async function POST(request: Request) {
     let event: Stripe.Event;
 
     try {
-        event = stripe.webhooks.constructEvent(
+        event = stripe().webhooks.constructEvent(
             body,
             signature,
             process.env.STRIPE_WEBHOOK_SECRET!

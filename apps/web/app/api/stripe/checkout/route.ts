@@ -1,11 +1,21 @@
 import { NextResponse } from 'next/server';
 import Stripe from 'stripe';
 
-const stripe = new Stripe(process.env.STRIPE_SECRET_KEY!, {
-    apiVersion: '2023-10-16' as any,
-});
-
 import { PLAN_CONFIG } from '../../../../lib/stripe-plan-config';
+
+// Constructed on first request, not at module load. `next build` imports every
+// route to collect page data, so a module-scope `new Stripe(undefined)` throws
+// and fails the whole build — which is what happens on any host that does not
+// expose STRIPE_SECRET_KEY to the build step.
+let _stripe: Stripe | null = null;
+function stripe(): Stripe {
+    if (!_stripe) {
+        const key = process.env.STRIPE_SECRET_KEY;
+        if (!key) throw new Error('STRIPE_SECRET_KEY is not configured.');
+        _stripe = new Stripe(key, { apiVersion: '2023-10-16' as any });
+    }
+    return _stripe;
+}
 
 export async function POST(request: Request) {
     try {
@@ -23,7 +33,7 @@ export async function POST(request: Request) {
         const origin = request.headers.get('origin') || 'http://localhost:3001';
 
         // Create Stripe Checkout Session
-        const session = await stripe.checkout.sessions.create({
+        const session = await stripe().checkout.sessions.create({
             mode: planConfig.mode,
             payment_method_types: ['card'],
             // customer_creation is only valid in payment mode; subscription mode always creates a customer
