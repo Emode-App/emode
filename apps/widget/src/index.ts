@@ -22,6 +22,8 @@ interface WidgetConfig {
     placement?: 'before-cart' | 'after-cart' | 'append';
     /** Set false to place the buttons yourself via window.emode.mount(el). */
     autoInject?: boolean;
+    /** Override the emode origin. For emode's own development only. */
+    host?: string;
 }
 
 interface ProductContext {
@@ -230,9 +232,21 @@ class EmodeWidget {
 
     constructor(config: WidgetConfig) {
         this.config = config;
-        const isDev = ['localhost', '127.0.0.1'].includes(window.location.hostname)
-            || window.location.protocol === 'file:';
-        this.baseUrl = isDev ? 'http://localhost:3000' : EMODE_ORIGIN;
+
+        // Always production, even on localhost.
+        //
+        // A previous version pointed at http://localhost:3000 whenever the page
+        // was served from localhost, on the assumption that localhost meant
+        // "emode is running locally". For a merchant that is backwards:
+        // localhost is THEIR site. It made the widget load the modal from the
+        // merchant's own dev server — a guaranteed 404, and on the same port
+        // Next.js defaults to, so the two collide.
+        //
+        // Working against production from localhost is the point: a brand can
+        // integrate emode while building their store and have it work before
+        // they have deployed anything. Only emode's own developers need to
+        // override this, via data-emode-host.
+        this.baseUrl = (config.host || EMODE_ORIGIN).replace(/\/+$/, '');
         this.visitorId = getVisitorId();
     }
 
@@ -437,6 +451,10 @@ class EmodeWidget {
         priceSelector: script?.dataset.priceSelector,
         placement: (script?.dataset.placement as WidgetConfig['placement']) || undefined,
         autoInject: script?.dataset.autoInject !== 'false',
+        // data-emode-host="http://localhost:3000" points the widget at a local
+        // emode instance. Merchants never need this; it exists so emode's own
+        // developers can test the widget against a dev server.
+        host: script?.dataset.emodeHost,
     };
 
     if (!config.merchantId) {
