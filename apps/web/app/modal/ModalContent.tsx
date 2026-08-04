@@ -597,15 +597,28 @@ export function ModalContent({ initialProduct, onClose }: ModalContentProps) {
                 ) : (
                     <div className="flex-1 flex flex-col p-8 bg-off-white overflow-y-auto">
                         <div className="max-w-5xl mx-auto w-full">
-                            <div className="flex items-center justify-between mb-8">
-                                <h2 className="text-3xl font-heading font-bold tracking-tighter">YOUR DRESSING ROOM</h2>
-                                <div className="flex gap-4">
-                                    {selectedIds.length > 0 && (
+                            <div className="flex items-start justify-between mb-8 gap-6">
+                                <div>
+                                    <h2 className="text-3xl font-heading font-bold tracking-tighter">YOUR DRESSING ROOM</h2>
+                                    {/* Selection was invisible: the cards gave no hint they were
+                                        selectable, and the button that reveals the whole feature
+                                        only appeared once something was already selected. */}
+                                    {dressingRoomItems.length > 0 && (
+                                        <p className="text-sm text-charcoal/50 mt-2">
+                                            Pick the pieces you want to see on at once, then try them together.
+                                        </p>
+                                    )}
+                                </div>
+                                <div className="flex gap-4 shrink-0">
+                                    {dressingRoomItems.length > 0 && (
                                         <button
                                             onClick={() => setActiveTab('try-on')}
-                                            className="px-6 py-3 bg-accent-gold text-black rounded-full font-bold text-xs tracking-widest uppercase hover:scale-105 transition-all shadow-lg"
+                                            disabled={selectedIds.length === 0}
+                                            className="px-6 py-3 bg-accent-gold text-black rounded-full font-bold text-xs tracking-widest uppercase transition-all shadow-lg enabled:hover:scale-105 disabled:opacity-40 disabled:cursor-not-allowed disabled:shadow-none"
                                         >
-                                            Try {selectedIds.length} Selected
+                                            {selectedIds.length > 0
+                                                ? `Try ${selectedIds.length} Together`
+                                                : 'Try Together'}
                                         </button>
                                     )}
                                     <button className="px-6 py-3 bg-obsidian text-white rounded-full font-bold text-xs tracking-widest uppercase hover:bg-black transition-all">
@@ -636,13 +649,21 @@ export function ModalContent({ initialProduct, onClose }: ModalContentProps) {
                                             >
                                                 <X className="w-4 h-4" />
                                             </button>
-                                            {selectedIds.includes(item.id) && (
-                                                <div className="absolute top-2 left-2 bg-accent-gold text-black w-6 h-6 rounded-full flex items-center justify-center text-[10px] font-bold z-10 shadow-md">
-                                                    ✓
-                                                </div>
-                                            )}
+                                            {/* Always rendered, empty when unselected — an affordance
+                                                that only appears once you have used it teaches nobody. */}
+                                            <div
+                                                className={`absolute top-2 left-2 w-6 h-6 rounded-full flex items-center justify-center text-[10px] font-bold z-10 transition-all ${
+                                                    selectedIds.includes(item.id)
+                                                        ? 'bg-accent-gold text-black shadow-md'
+                                                        : 'border-2 border-black/15 bg-white/70 group-hover:border-black/40'
+                                                }`}
+                                            >
+                                                {selectedIds.includes(item.id) ? '✓' : ''}
+                                            </div>
                                             <div className="aspect-[3/4] bg-off-white rounded-lg overflow-hidden mb-4">
-                                                <img src={item.image} alt={item.title} className="w-full h-full object-cover" />
+                                                {/* contain, not cover: these are garment cutouts, and
+                                                    cropping one to fill the tile hides its cut. */}
+                                                <img src={item.image} alt={item.title} className="w-full h-full object-contain" />
                                             </div>
                                             <h3 className="font-bold text-sm mb-1 truncate">{item.title}</h3>
                                             <p className="text-xs text-charcoal/60">{item.price}</p>
