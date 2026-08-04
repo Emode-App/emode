@@ -159,6 +159,68 @@ async function consume(subject: Subject, limit: number): Promise<{ allowed: bool
     return { allowed: !!row?.allowed, used: row?.used ?? 0 };
 }
 
+// Map whatever product reference the caller sent onto our own products.id.
+//
+// The Shopify theme extension passes Liquid's `product.id`, a bare number, but
+// syncProducts stores the GraphQL GID ("gid://shopify/Product/123"). Try both so
+// either form resolves. The widget scrapes the DOM and has no product id at all,
+// which is fine — the generation is still recorded against the merchant.
+async function resolveProductId(merchantId: string, productRef: unknown): Promise<string | null> {
+    if (!merchantId || !productRef) return null;
+
+    const ref = String(productRef).trim();
+    if (!ref) return null;
+
+    const candidates = ref.startsWith('gid://')
+        ? [ref]
+        : [`gid://shopify/Product/${ref}`, ref];
+
+    const { data } = await supabase
+        .from('products')
+        .select('id')
+        .eq('merchant_id', merchantId)
+        .in('platform_product_id', candidates)
+        .limit(1)
+        .maybeSingle();
+
+    return data?.id || null;
+}
+
+// Record the try-on for merchant analytics.
+//
+// This used to happen client-side in the modal, guarded by `if (user)` — so it
+// never ran for the anonymous storefront shoppers who make up essentially all
+// real traffic, and it never set product_id, leaving every per-product count at
+// zero. Doing it here means it runs for every successful generation regardless
+// of who is signed in, and the service-role client is not subject to the RLS
+// policy that restricted inserts to `user_id = auth.uid()`.
+//
+// Deliberately does NOT store the result image: it comes back as a multi-MB
+// base64 data URL, and writing that per generation would bloat Postgres fast.
+// Wire this to Supabase Storage and save the object path instead.
+async function recordGeneration(opts: {
+    merchantId: string;
+    userId: string | null;
+    productRef: unknown;
+    productImages: string[];
+}) {
+    try {
+        const productId = await resolveProductId(opts.merchantId, opts.productRef);
+
+        await supabase.from('generations').insert({
+            user_id: opts.userId || null,
+            merchant_id: opts.merchantId || null,
+            product_id: productId,
+            mode: opts.productImages.length > 1 ? 'outfit' : 'single',
+            input_product_image_url: opts.productImages[0] || null,
+            status: 'succeeded',
+        });
+    } catch (err) {
+        // Analytics must never fail the user's try-on.
+        console.error('[API/Generate] Failed to record generation:', err);
+    }
+}
+
 // Give a reserved credit back when the generation itself fails.
 async function release(subject: Subject) {
     const { error } = await supabase.rpc('release_generation', { p_subject_id: subject.id });
@@ -244,6 +306,17 @@ export async function POST(request: Request) {
             category: body.category,
             bodyMetadata: body.bodyMetadata
         });
+
+        // ── 5. Record it for the merchant's dashboard ──
+        // Skipped for the landing-page demo, which has no real merchant.
+        if (merchantId && merchantId !== 'demo_hero_interactive') {
+            await recordGeneration({
+                merchantId,
+                userId: authedUserId,
+                productRef: body.productId,
+                productImages: body.productImages,
+            });
+        }
 
         return NextResponse.json(result, { headers: corsHeaders });
     } catch (error: any) {

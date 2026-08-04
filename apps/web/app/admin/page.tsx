@@ -7,22 +7,30 @@ async function getStats(merchantId?: string) {
     const genQuery = serviceClient.from('generations').select('*', { count: 'exact', head: true });
     const merchantQuery = serviceClient.from('merchants').select('*', { count: 'exact', head: true });
     const productQuery = serviceClient.from('products').select('*', { count: 'exact', head: true });
+    // usage_counters holds ONE row per subject per day, with the running total
+    // in generations_used. Counting rows (as this did) therefore reported 1
+    // whether the merchant had 1 try-on today or 200 — read the column instead.
     const usageQuery = serviceClient.from('usage_counters')
-        .select('*', { count: 'exact', head: true })
+        .select('generations_used')
         .eq('date', new Date().toISOString().split('T')[0]);
 
     if (merchantId) {
         genQuery.eq('merchant_id', merchantId);
         productQuery.eq('merchant_id', merchantId);
-        usageQuery.eq('subject_id', merchantId);
+        usageQuery.eq('subject_id', merchantId).eq('subject_type', 'merchant');
     }
 
     const [
         { count: totalGenerations },
         { count: activeMerchants },
         { count: totalProducts },
-        { count: todayGenerations },
+        { data: usageRows },
     ] = await Promise.all([genQuery, merchantQuery, productQuery, usageQuery]);
+
+    const todayGenerations = (usageRows || []).reduce(
+        (sum, row: any) => sum + (row.generations_used || 0),
+        0
+    );
 
     return {
         totalGenerations: totalGenerations || 0,

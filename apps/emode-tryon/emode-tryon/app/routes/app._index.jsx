@@ -121,8 +121,11 @@ async function linkMerchantAccount(admin, merchant) {
 // products in Supabase yet.
 async function syncProducts(admin, merchant, shop, marketplaceVisible) {
   try {
+    // status:active only. Without the filter Shopify also returns archived and
+    // draft products, so a merchant's emode catalog fills with items that are
+    // not for sale — and any of them could surface in the marketplace.
     const response = await admin.graphql(`
-      { products(first: 50) { edges { node {
+      { products(first: 50, query: "status:active") { edges { node {
           id title handle onlineStoreUrl productType
           featuredImage { url }
           variants(first: 1) { edges { node { id price } } }

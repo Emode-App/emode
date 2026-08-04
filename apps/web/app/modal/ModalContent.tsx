@@ -53,6 +53,9 @@ export function ModalContent({ initialProduct, onClose }: ModalContentProps) {
     // the merchant's paid entitlement instead of the shopper's personal free tier.
     const shopDomain = searchParams.get('shop') || '';
     const variantId = searchParams.get('variant') || '';
+    // The Shopify theme extension passes Liquid's product.id here; the server
+    // resolves it to our products.id so per-product try-on counts work.
+    const platformProductId = searchParams.get('product') || '';
     const originHost = searchParams.get('origin') || '';
     const [merchantId, setMerchantId] = useState(searchParams.get('merchant') || '');
     const [user, setUser] = useState<any>(null);
@@ -194,6 +197,7 @@ export function ModalContent({ initialProduct, onClose }: ModalContentProps) {
                         : [product.image],
                     title: product.title,
                     merchantId,
+                    productId: platformProductId || undefined,
                     guestId: session ? undefined : getGuestId(),
                 })
             });
@@ -203,17 +207,10 @@ export function ModalContent({ initialProduct, onClose }: ModalContentProps) {
 
             setResult(data.resultUrl);
 
-            // Persist Generation to Cloud Closet
-            if (user) {
-                await supabase.from('generations').insert({
-                    user_id: user.id,
-                    merchant_id: merchantId || null,
-                    mode: 'single',
-                    input_product_image_url: product.image,
-                    result_image_path: data.resultUrl,
-                    status: 'succeeded'
-                });
-            }
+            // Generations are recorded server-side in /api/generate. Doing it
+            // here only ever worked for signed-in users — never the anonymous
+            // storefront shoppers who are almost all of the traffic — and RLS
+            // blocked the insert anyway.
         } catch (err: any) {
             console.error(err);
             setError(err.message || 'Nano Banana Pro encountered a fabric drape error. Please try again.');
