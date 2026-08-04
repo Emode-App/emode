@@ -26,6 +26,15 @@ api_version = "2026-04"
   #
   # `shopify app config link` and `--reset` wipe this along with access_scopes,
   # so re-check both sections after running either.
+  # Try-on attribution. read_orders is required for these; see access_scopes.
+  [[webhooks.subscriptions]]
+  topics = [ "orders/create" ]
+  uri = "/webhooks/orders/create"
+
+  [[webhooks.subscriptions]]
+  topics = [ "refunds/create" ]
+  uri = "/webhooks/refunds/create"
+
   [webhooks.privacy_compliance]
   customer_data_request_url = "/webhooks/customers/data_request"
   customer_deletion_url = "/webhooks/customers/redact"
@@ -38,7 +47,12 @@ api_version = "2026-04"
 # app gets granted nothing and syncProducts() in app/routes/app._index.jsx fails
 # with a permissions error while everything else looks fine. `shopify app config
 # link` and `--reset` both blank this out — re-check it after either.
-scopes = "write_products,read_products"
+# read_orders powers try-on → purchase attribution. Note it is a PROTECTED
+# CUSTOMER DATA scope: it works immediately on development and custom-install
+# stores, but public App Store distribution requires an approved protected
+# customer data request from Shopify. Adding it also re-prompts existing
+# merchants for authorization.
+scopes = "write_products,read_products,read_orders"
 optional_scopes = [ ]
 use_legacy_install_flow = false
 

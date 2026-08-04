@@ -27,9 +27,11 @@
     },
     "devDependencies": {
         "@types/node": "latest",
+        "@types/phoenix": "^1.6.7",
         "@types/react": "latest",
         "@types/react-dom": "latest",
         "@types/react-syntax-highlighter": "^15.5.13",
+        "@types/ws": "^8.18.1",
         "autoprefixer": "^10.4.16",
         "eslint": "latest",
         "eslint-config-next": "^15.5.22",

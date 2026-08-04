@@ -1,6 +1,7 @@
 import { BarChart3, Users, Package, Zap, RefreshCw, Crown } from 'lucide-react';
 import { getMerchantForUser, serviceClient } from './admin-util';
 import { WidgetInstallCode } from './components/WidgetInstallCode';
+import { AttributionPanel, TryOnStats } from './components/AttributionPanel';
 
 async function getStats(merchantId?: string) {
     // Build queries — filter by merchant if available
@@ -69,12 +70,30 @@ async function getTopProducts(merchantId?: string) {
     return productStats.sort((a, b) => b.tryOnCount - a.tryOnCount);
 }
 
+// Conversion/AOV/returns for the try-on cohort vs everyone else. One RPC rather
+// than assembling it client-side: the attribution rule (a generation must
+// PRECEDE the order) is easy to get subtly wrong, so it lives in SQL where it
+// can be tested directly.
+async function getTryOnStats(merchantId?: string): Promise<TryOnStats | null> {
+    if (!merchantId) return null;
+    const { data, error } = await serviceClient.rpc('merchant_tryon_stats', {
+        p_merchant_id: merchantId,
+        p_days: 30,
+    });
+    if (error) {
+        console.error('[admin] merchant_tryon_stats failed:', error);
+        return null;
+    }
+    return (Array.isArray(data) ? data[0] : data) || null;
+}
+
 export const dynamic = 'force-dynamic';
 
 export default async function AdminDashboard() {
     const merchant = await getMerchantForUser();
     const stats = await getStats(merchant?.id);
     const topProducts = await getTopProducts(merchant?.id);
+    const tryOnStats = await getTryOnStats(merchant?.id);
 
     const statCards = [
         {
@@ -126,6 +145,8 @@ export default async function AdminDashboard() {
                     <WidgetInstallCode merchantId={merchant.id} />
                 </div>
             )}
+
+            <AttributionPanel stats={tryOnStats} />
 
             {/* Stats Grid */}
             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-8 mb-12">

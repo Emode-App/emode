@@ -56,6 +56,9 @@ export function ModalContent({ initialProduct, onClose }: ModalContentProps) {
     // The Shopify theme extension passes Liquid's product.id here; the server
     // resolves it to our products.id so per-product try-on counts work.
     const platformProductId = searchParams.get('product') || '';
+    // Minted by the theme extension on the merchant's domain; travels with the
+    // generation so an order carrying the same id can be attributed to it.
+    const visitorId = searchParams.get('vid') || '';
     const originHost = searchParams.get('origin') || '';
     const [merchantId, setMerchantId] = useState(searchParams.get('merchant') || '');
     const [user, setUser] = useState<any>(null);
@@ -198,6 +201,7 @@ export function ModalContent({ initialProduct, onClose }: ModalContentProps) {
                     title: product.title,
                     merchantId,
                     productId: platformProductId || undefined,
+                    visitorId: visitorId || undefined,
                     guestId: session ? undefined : getGuestId(),
                 })
             });

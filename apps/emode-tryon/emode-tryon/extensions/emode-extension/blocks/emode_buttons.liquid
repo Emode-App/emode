@@ -32,6 +32,78 @@
   // ── Config ──
   var EMODE_HOST = '{{ block.settings.emode_host | default: "https://emode.style" }}';
   var SHOP_DOMAIN = '{{ shop.permanent_domain }}';
+  var PRODUCT_ID = '{{ product.id }}';
+
+  // ── Shopper identity for try-on → purchase attribution ──
+  //
+  // This id MUST be minted here, on the merchant's own domain. The try-on modal
+  // runs in a cross-origin iframe whose storage browsers partition, so anything
+  // stored there is invisible by the time the shopper reaches checkout.
+  //
+  // It is a random opaque value — no personal data, nothing derived from the
+  // shopper — and it exists purely to join a try-on to an order.
+  var VISITOR_KEY = 'emode_visitor_id';
+  var TRIED_KEY = 'emode_tried_on';
+
+  function getVisitorId() {
+    try {
+      var id = localStorage.getItem(VISITOR_KEY);
+      if (!id) {
+        id = (window.crypto && crypto.randomUUID)
+          ? crypto.randomUUID()
+          : 'v-' + Date.now() + '-' + Math.random().toString(36).slice(2, 11);
+        localStorage.setItem(VISITOR_KEY, id);
+      }
+      return id;
+    } catch (e) {
+      // Private browsing or storage disabled — attribution is simply skipped.
+      return null;
+    }
+  }
+
+  var VISITOR_ID = getVisitorId();
+
+  // Writes the visitor id onto the Shopify cart. Shopify carries cart
+  // attributes through to the order, where the orders/create webhook reads it
+  // back — that is the whole attribution chain.
+  //
+  // The underscore prefix keeps it out of the customer's order confirmation and
+  // the merchant's order display.
+  //
+  // Setting it on the cart (rather than hooking each theme's add-to-cart form)
+  // is deliberate: cart attributes persist for the session, so anything added
+  // afterwards carries the id regardless of how the theme adds to cart. No
+  // theme-specific DOM assumptions, nothing to break on an unusual template.
+  function tagCart() {
+    if (!VISITOR_ID) return;
+    fetch('/cart/update.js', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ attributes: { _emode_vid: VISITOR_ID } })
+    }).catch(function () { /* never let analytics break the storefront */ });
+  }
+
+  // Records that this shopper SAW the try-on button — the control group that
+  // makes "try-on shoppers convert at X%" a meaningful claim rather than a
+  // number with nothing to compare against. Deduplicated server-side.
+  function logImpression() {
+    if (!VISITOR_ID) return;
+    fetch(EMODE_HOST + '/api/impression', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ shop: SHOP_DOMAIN, visitorId: VISITOR_ID, productId: PRODUCT_ID }),
+      keepalive: true
+    }).catch(function () {});
+  }
+
+  logImpression();
+
+  // A returning shopper who has tried on before may land with a fresh cart, so
+  // re-tag on load. First-time visitors get tagged when they open the modal —
+  // avoids a cart write on every product pageview for people who never engage.
+  try {
+    if (localStorage.getItem(TRIED_KEY)) tagCart();
+  } catch (e) {}
 
   // ── Build modal URL from button data attributes ──
   function buildModalUrl(btn, tab) {
@@ -44,7 +116,10 @@
       image: d.productImage || '',
       price: d.productPrice || '',
       tab: tab || 'try-on',
-      source: 'shopify'
+      source: 'shopify',
+      // Threaded to /api/generate so the generation row carries the same id
+      // that will appear on the order.
+      vid: VISITOR_ID || ''
     });
     return EMODE_HOST + '/modal?' + params.toString();
   }
@@ -133,11 +208,20 @@
   });
 
   // ── Button handlers ──
+  // Opening the modal is the engagement signal: tag the cart now so any
+  // subsequent purchase is attributable, and remember it for return visits.
+  function onEngage() {
+    try { localStorage.setItem(TRIED_KEY, '1'); } catch (e) {}
+    tagCart();
+  }
+
   document.getElementById('emode-try-on').addEventListener('click', function() {
+    onEngage();
     openEmodeModal(buildModalUrl(this, 'try-on'));
   });
 
   document.getElementById('emode-add-to-dressing-room').addEventListener('click', function() {
+    onEngage();
     openEmodeModal(buildModalUrl(this, 'dressing-room'));
   });
 })();

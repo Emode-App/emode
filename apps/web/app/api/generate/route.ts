@@ -203,6 +203,7 @@ async function recordGeneration(opts: {
     userId: string | null;
     productRef: unknown;
     productImages: string[];
+    visitorId: string | null;
 }) {
     try {
         const productId = await resolveProductId(opts.merchantId, opts.productRef);
@@ -211,6 +212,10 @@ async function recordGeneration(opts: {
             user_id: opts.userId || null,
             merchant_id: opts.merchantId || null,
             product_id: productId,
+            // Minted by the theme extension on the merchant's own domain, and
+            // echoed into the Shopify cart attribute — this is what lets the
+            // orders webhook tie a purchase back to a try-on.
+            visitor_id: opts.visitorId || null,
             mode: opts.productImages.length > 1 ? 'outfit' : 'single',
             input_product_image_url: opts.productImages[0] || null,
             status: 'succeeded',
@@ -315,6 +320,7 @@ export async function POST(request: Request) {
                 userId: authedUserId,
                 productRef: body.productId,
                 productImages: body.productImages,
+                visitorId: typeof body.visitorId === 'string' ? body.visitorId.slice(0, 64) : null,
             });
         }
 
