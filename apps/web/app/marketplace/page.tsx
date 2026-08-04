@@ -77,13 +77,38 @@ async function getMarketplaceProducts(category?: string, search?: string, brand?
 }
 
 async function getBrands() {
-    const { data } = await supabase
-        .from('merchants')
-        .select('brand_name, brand_slug')
-        .not('brand_slug', 'is', null)
-        .order('brand_name');
+    // Only brands with at least one marketplace-visible product.
+    //
+    // This previously listed every merchant that had a brand_slug, regardless of
+    // marketplace visibility. Two problems: it publicly advertised the names of
+    // merchants on plans without marketplace access (who never agreed to appear
+    // here), and every one of those chips led to an empty results page.
+    //
+    // Driven from products rather than merchants so visibility is the source of
+    // truth — !inner makes the merchant join a filter, not an optional expand.
+    const { data, error } = await supabase
+        .from('products')
+        .select('merchants!inner(brand_name, brand_slug)')
+        .eq('marketplace_visible', true)
+        .not('merchants.brand_slug', 'is', null);
 
-    return data || [];
+    if (error) {
+        console.error('[marketplace] Failed to load brands:', error);
+        return [];
+    }
+
+    // One row per product, so collapse to distinct brands.
+    const seen = new Map<string, { brand_name: string; brand_slug: string }>();
+    for (const row of data || []) {
+        const m = (row as any).merchants;
+        if (m?.brand_slug && !seen.has(m.brand_slug)) {
+            seen.set(m.brand_slug, { brand_name: m.brand_name, brand_slug: m.brand_slug });
+        }
+    }
+
+    return [...seen.values()].sort((a, b) =>
+        (a.brand_name || '').localeCompare(b.brand_name || '')
+    );
 }
 
 export const dynamic = 'force-dynamic';
