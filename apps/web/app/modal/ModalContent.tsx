@@ -42,10 +42,43 @@ export function ModalContent({ initialProduct, onClose }: ModalContentProps) {
     const [showUpgrade, setShowUpgrade] = useState(false);
     const [upgrading, setUpgrading] = useState(false);
 
+    // Garment image handed over by the embedding page instead of by URL.
+    //
+    // The generator fetches the product image server-side, which only works if
+    // the image is on the public internet. It isn't when a brand is building
+    // their store on localhost, and it isn't on a password-protected staging
+    // site either. In those cases the widget reads the image off its own page
+    // and posts it here as a data URL, since a data URL is far too large to
+    // travel in the iframe's query string.
+    //
+    // No new trust is granted: the embedding page already chooses the image via
+    // ?image=, so it can already point the try-on at anything it likes.
+    const [handoffImage, setHandoffImage] = useState<string | null>(null);
+
+    useEffect(() => {
+        if (window.parent === window) return; // Not embedded — nothing to receive.
+
+        const onMessage = (e: MessageEvent) => {
+            if (e.source !== window.parent) return;
+            if (e.data?.type !== 'emode:image') return;
+            const url = e.data.dataUrl;
+            if (typeof url === 'string' && url.startsWith('data:image/')) {
+                setHandoffImage(url);
+            }
+        };
+        window.addEventListener('message', onMessage);
+
+        // The widget cannot know when this component mounted, so we announce it.
+        // Waiting on the iframe's load event instead would race the listener above.
+        window.parent.postMessage({ type: 'emode:ready' }, '*');
+
+        return () => window.removeEventListener('message', onMessage);
+    }, []);
+
     // Current Product Context - use props if provided, otherwise searchParams
     const product = initialProduct || {
         title: searchParams.get('title') || 'Midnight Blazer',
-        image: searchParams.get('image') || 'https://images.unsplash.com/photo-1591047139829-d91aecb6caea?q=80&w=400&h=600&auto=format&fit=crop',
+        image: handoffImage || searchParams.get('image') || 'https://images.unsplash.com/photo-1591047139829-d91aecb6caea?q=80&w=400&h=600&auto=format&fit=crop',
         price: searchParams.get('price') || '$299.00',
     };
     // Shopify's theme extension identifies the store by domain (?shop=), the widget

@@ -173,6 +173,31 @@ function findCartButton(): HTMLElement | null {
 
 const PRICE_RE = /(?:[$£€¥]|USD|EUR|GBP)\s?\d[\d.,]*/;
 
+/**
+ * The biggest image actually on screen, which is what "the product shot" means.
+ *
+ * Ranked by RENDERED area, not intrinsic. Intrinsic size ranks the related-
+ * products strip level with the hero whenever a site reuses the same file for
+ * both — which is the normal case — and then the winner comes down to sort
+ * stability rather than anything meaningful.
+ *
+ * naturalWidth is still used, as a quality floor: it rejects logos, icons and
+ * tracking pixels, and rejects images that have not decoded yet (0), so a scan
+ * that runs before the gallery loads reports nothing and is retried instead of
+ * locking in a placeholder.
+ */
+function largestImage(scope: ParentNode): string | undefined {
+    const best = Array.from(scope.querySelectorAll('img'))
+        .filter((img) => img.offsetParent !== null && img.naturalWidth > 150)
+        .map((img) => {
+            const r = img.getBoundingClientRect();
+            return { img, area: r.width * r.height };
+        })
+        .filter((c) => c.area > 0)
+        .sort((a, b) => b.area - a.area)[0];
+    return best && (best.img.currentSrc || best.img.src);
+}
+
 /** Tier 3: DOM heuristics, anchored on the cart button rather than class names. */
 function fromDom(config: WidgetConfig): ProductContext | null {
     const explicitContainer = config.productSelector
@@ -184,7 +209,16 @@ function fromDom(config: WidgetConfig): ProductContext | null {
     let container: HTMLElement | null = explicitContainer;
     if (!container) {
         const cart = findCartButton();
-        let node: HTMLElement | null = cart?.parentElement || null;
+
+        // No add-to-cart control means no evidence this is a product page. The
+        // fallbacks below — any <h1>, the largest image — will happily produce a
+        // "product" from a homepage or a collection grid, and the buttons would
+        // then open a try-on for whichever item was rendered biggest. Requiring
+        // the cart button is what separates a product page from a page that
+        // merely contains products.
+        if (!cart) return null;
+
+        let node: HTMLElement | null = cart.parentElement;
         for (let depth = 0; node && depth < 8; depth++) {
             if (node.querySelector('h1, h2')) { container = node; break; }
             node = node.parentElement;
@@ -202,12 +236,14 @@ function fromDom(config: WidgetConfig): ProductContext | null {
         image = (document.querySelector(config.imageSelector) as HTMLImageElement | null)?.currentSrc;
     }
     if (!image) {
-        // Largest rendered image wins. Works with next/image, lazy loaders and
-        // CDN query strings, none of which a src-substring match survives.
-        const imgs = Array.from(scope.querySelectorAll('img'))
-            .filter((img) => img.offsetParent !== null && img.naturalWidth > 150)
-            .sort((a, b) => (b.naturalWidth * b.naturalHeight) - (a.naturalWidth * a.naturalHeight));
-        image = imgs[0]?.currentSrc || imgs[0]?.src;
+        // Prefer an image inside the product block, but do not require one. The
+        // container is found by walking up from the cart button to the nearest
+        // heading, and in the standard two-column product layout that lands on
+        // the info column — whose sibling, not whose subtree, holds the gallery.
+        // Scoping alone would therefore find no image on most real storefronts.
+        // The cart button has already established this is a product page, so
+        // widening to the document is safe here.
+        image = largestImage(scope) || (scope !== document ? largestImage(document) : undefined);
     }
 
     let price: string | undefined;
@@ -221,6 +257,68 @@ function fromDom(config: WidgetConfig): ProductContext | null {
 
     if (!title || !image) return null;
     return { title, image: absoluteUrl(image), price, url: window.location.href };
+}
+
+/* ------------------------------------------------------------------ *
+ * Images emode's servers cannot reach
+ *
+ * Generation fetches the garment image server-side, so it needs a URL that
+ * resolves on the public internet. Two ordinary situations produce one that
+ * doesn't: a brand integrating emode while still building the store on
+ * localhost, and a password-protected staging domain. Rather than fail, the
+ * widget reads the image off the page it is already running on and hands the
+ * bytes to the modal directly.
+ * ------------------------------------------------------------------ */
+
+const PRIVATE_HOST_RE =
+    /^(localhost|127\.|0\.0\.0\.0$|\[?::1\]?$|10\.|192\.168\.|172\.(1[6-9]|2\d|3[01])\.)|\.local$|\.test$|\.localhost$/i;
+
+function isReachableByServer(url: string): boolean {
+    try {
+        const u = new URL(url, window.location.href);
+        if (u.protocol !== 'http:' && u.protocol !== 'https:') return false;
+        return !PRIVATE_HOST_RE.test(u.hostname);
+    } catch {
+        return false;
+    }
+}
+
+/**
+ * Re-encode an on-page image as a data URL.
+ *
+ * Capped at 1024px and JPEG-encoded: the raw file can be several megabytes,
+ * and the generate endpoint also carries the shopper's photo in the same
+ * request, under a 4.5MB serverless body limit.
+ *
+ * Returns null rather than throwing when the canvas is tainted — an image
+ * served cross-origin without CORS headers cannot be read back, and that is a
+ * normal outcome, not an error worth surfacing to a shopper.
+ */
+function inlineImage(src: string): Promise<string | null> {
+    return new Promise((resolve) => {
+        const img = new Image();
+        img.crossOrigin = 'anonymous';
+        img.onload = () => {
+            try {
+                const scale = Math.min(1, 1024 / Math.max(img.naturalWidth, img.naturalHeight));
+                const canvas = document.createElement('canvas');
+                canvas.width = Math.round(img.naturalWidth * scale);
+                canvas.height = Math.round(img.naturalHeight * scale);
+                const ctx = canvas.getContext('2d');
+                if (!ctx) return resolve(null);
+                // Transparent PNGs are common for garment cutouts and go black
+                // on a JPEG background, so flatten onto white first.
+                ctx.fillStyle = '#fff';
+                ctx.fillRect(0, 0, canvas.width, canvas.height);
+                ctx.drawImage(img, 0, 0, canvas.width, canvas.height);
+                resolve(canvas.toDataURL('image/jpeg', 0.86));
+            } catch {
+                resolve(null);
+            }
+        };
+        img.onerror = () => resolve(null);
+        img.src = src;
+    });
 }
 
 class EmodeWidget {
@@ -385,10 +483,21 @@ class EmodeWidget {
             'box-shadow:0 30px 60px rgba(0,0,0,.5);background:#fff';
         iframe.setAttribute('allow', 'camera;microphone');
 
+        // Kick off the re-encode now, in parallel with the iframe loading, so the
+        // image is usually ready by the time the modal says it is listening.
+        const handoff = isReachableByServer(c.image) ? null : inlineImage(c.image);
+
         const onMessage = (e: MessageEvent) => {
             if (e.origin !== this.baseUrl) return; // Only trust the modal's origin.
             if (!e.data || typeof e.data !== 'object') return;
             if (e.data.type === 'emode:close') close();
+            if (e.data.type === 'emode:ready' && handoff) {
+                handoff.then((dataUrl) => {
+                    if (dataUrl) iframe.contentWindow?.postMessage(
+                        { type: 'emode:image', dataUrl }, this.baseUrl
+                    );
+                });
+            }
             if (e.data.type === 'emode:add-to-cart') {
                 // The host site owns its cart. Sites that listen can add
                 // directly; the rest fall through to the product page.
