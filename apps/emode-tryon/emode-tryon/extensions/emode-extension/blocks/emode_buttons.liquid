@@ -201,6 +201,62 @@
     if (localStorage.getItem(TRIED_KEY)) tagCart();
   } catch (e) {}
 
+  // ── Match the theme's buy buttons ──
+  //
+  // As a section-target block, Shopify inserts this at the section level, which
+  // on most themes sits outside the padded container holding Add to cart /
+  // Buy it now. The result is a row that runs wider than everything around it.
+  //
+  // Rather than make every merchant hand-tune a width slider, measure the
+  // theme's own add-to-cart control and match its width and left edge. Purely
+  // cosmetic and wrapped in try/catch — if the selectors miss, the row simply
+  // stays full width as before.
+  function matchBuyButtonWidth() {
+    // Skip when the merchant has set an explicit width in the theme editor.
+    if ({{ block.settings.max_width | default: 0 }} > 0) return;
+
+    var wrap = document.querySelector('.emode-buttons');
+    if (!wrap || !wrap.parentElement) return;
+
+    // Ordered most- to least-specific. button[name="add"] is the Shopify
+    // convention and works on the overwhelming majority of themes.
+    var ref = document.querySelector(
+      '.product-form__buttons, .shopify-payment-button, form[action*="/cart/add"] button[name="add"], button[name="add"]'
+    );
+    if (!ref) return;
+
+    var refBox = ref.getBoundingClientRect();
+    var parentBox = wrap.parentElement.getBoundingClientRect();
+    if (!refBox.width || !parentBox.width) return;
+
+    // Ignore absurd measurements (hidden elements, sticky bars, drawers).
+    if (refBox.width < 80 || refBox.width > parentBox.width + 4) return;
+
+    wrap.style.maxWidth = Math.round(refBox.width) + 'px';
+    var offset = Math.round(refBox.left - parentBox.left);
+    if (offset > 0) wrap.style.marginLeft = offset + 'px';
+  }
+
+  function scheduleMatch() {
+    try { matchBuyButtonWidth(); } catch (e) {}
+  }
+
+  if (document.readyState === 'loading') {
+    document.addEventListener('DOMContentLoaded', scheduleMatch);
+  } else {
+    scheduleMatch();
+  }
+  // Themes that render the buy buttons asynchronously (or swap them on variant
+  // change) settle shortly after load.
+  setTimeout(scheduleMatch, 400);
+  setTimeout(scheduleMatch, 1200);
+
+  var resizeTimer;
+  window.addEventListener('resize', function () {
+    clearTimeout(resizeTimer);
+    resizeTimer = setTimeout(scheduleMatch, 150);
+  });
+
   // ── Build modal URL from button data attributes ──
   function buildModalUrl(btn, tab) {
     var d = btn.dataset;
@@ -340,7 +396,7 @@
       "step": 20,
       "unit": "px",
       "default": 0,
-      "info": "Match your Add to cart button's width. 0 = full width of the container."
+      "info": "Leave at 0 to match your Add to cart button automatically. Set a value only if the automatic match is wrong on your theme."
     },
     {
       "type": "select",
