@@ -79,7 +79,7 @@ async function linkMerchantAccount(admin, merchant) {
   if (created?.user) {
     userId = created.user.id;
   } else {
-    // Already registered (they may have signed up on emode.app first). The
+    // Already registered (they may have signed up on emode.style first). The
     // admin API has no lookup-by-email, so scan. Paginated at 1000 to stay
     // correct past the 50-row default page.
     const { data: list } = await supabase.auth.admin.listUsers({ page: 1, perPage: 1000 });
@@ -324,7 +324,7 @@ export default function Index() {
                   <Box paddingBlockStart="200">
                     <Text variant="bodyMd" as="p" tone="subdued">
                       Full try-on analytics live in your emode dashboard. Sign in
-                      at <b>emode.app/login</b> with this store&apos;s contact email —
+                      at <b>emode.style/login</b> with this store&apos;s contact email —
                       we&apos;ve already created the account, and it signs in by
                       magic link, so there&apos;s no password to set.
                     </Text>

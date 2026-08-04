@@ -4,11 +4,12 @@ import { useState } from 'react';
 import { Prism as SyntaxHighlighter } from 'react-syntax-highlighter';
 import { vscDarkPlus } from 'react-syntax-highlighter/dist/esm/styles/prism';
 import { Check, Copy } from 'lucide-react';
+import { SITE_URL } from '../../../lib/site';
 
 export function WidgetInstallCode({ merchantId }: { merchantId: string }) {
     const [copied, setCopied] = useState(false);
 
-    const baseUrl = typeof window !== 'undefined' ? window.location.origin : 'https://emode.app';
+    const baseUrl = typeof window !== 'undefined' ? window.location.origin : SITE_URL;
     const widgetCode = `<script src="${baseUrl}/widget.js" data-emode-merchant="${merchantId || 'YOUR_MERCHANT_ID'}"></script>`;
 
     const handleCopy = () => {

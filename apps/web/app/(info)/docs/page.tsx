@@ -1,6 +1,7 @@
 import { Metadata } from 'next';
 import { Terminal, Code2, Zap } from 'lucide-react';
 import Link from 'next/link';
+import { SITE_URL } from '../../../lib/site';
 
 export const metadata: Metadata = {
     title: 'API Documentation | emodeAI',
@@ -25,7 +26,7 @@ export default function DocsPage() {
                         The easiest way to integrate emodeAI is via the Drop-In Embedded Widget. Once you subscribe via the <Link href="/login" className="underline font-bold">Dashboard</Link>, you will be granted a unique Merchant ID tag.
                     </p>
                     <div className="p-4 bg-obsidian text-green-400 font-mono text-sm rounded-xl overflow-x-auto shadow-inner mb-4 flex flex-col gap-2">
-                        <span><span className="text-blue-400">&lt;script</span> <span className="text-purple-400">src=</span><span className="text-yellow-300">"https://emode.app/widget.js"</span><span className="text-blue-400">&gt;&lt;/script&gt;</span></span>
+                        <span><span className="text-blue-400">&lt;script</span> <span className="text-purple-400">src=</span><span className="text-yellow-300">{`"${SITE_URL}/widget.js"`}</span><span className="text-blue-400">&gt;&lt;/script&gt;</span></span>
                         <span><span className="text-blue-400">&lt;div</span> <span className="text-purple-400">id=</span><span className="text-yellow-300">"emode-widget-root"</span> <span className="text-purple-400">data-merchant-id=</span><span className="text-yellow-300">"[YOUR_MERCHANT_ID]"</span><span className="text-blue-400">&gt;&lt;/div&gt;</span></span>
                     </div>
                     <p className="text-sm">
@@ -44,7 +45,7 @@ export default function DocsPage() {
                     <div className="p-4 bg-off-white border border-black/10 rounded-xl mb-4">
                         <div className="flex items-center gap-3 mb-3 border-b border-black/5 pb-2">
                             <span className="px-2 py-1 bg-green-100 text-green-700 text-[10px] font-bold uppercase tracking-widest rounded-md">POST</span>
-                            <code className="text-sm font-bold">https://emode.app/api/generate</code>
+                            <code className="text-sm font-bold">{`${SITE_URL}/api/generate`}</code>
                         </div>
                         <p className="text-sm font-bold mb-2">Request Body (JSON):</p>
                         <ul className="list-disc pl-6 text-sm space-y-1 mb-4">

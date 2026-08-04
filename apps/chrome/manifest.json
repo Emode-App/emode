@@ -29,8 +29,8 @@
         },
         {
             "matches": [
-                "https://emode.app/*",
-                "https://*.emode.app/*",
+                "https://emode.style/*",
+                "https://*.emode.style/*",
                 "http://localhost:3000/*"
             ],
             "js": [

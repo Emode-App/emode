@@ -1,6 +1,7 @@
 import { getMerchantForUser, serviceClient } from '../admin-util';
 import { Settings, Save, AlertCircle } from 'lucide-react';
 import { revalidatePath } from 'next/cache';
+import { SITE_HOST } from '../../../lib/site';
 
 export const dynamic = 'force-dynamic';
 
@@ -84,7 +85,7 @@ export default async function AdminSettingsPage() {
                             Marketplace URL Slug
                         </label>
                         <div className="w-full px-4 py-3 bg-black/5 border border-black/5 rounded-lg font-mono text-sm text-charcoal/60 flex items-center gap-2">
-                            <span className="opacity-50">emode.app/marketplace/</span>
+                            <span className="opacity-50">{SITE_HOST}/marketplace/</span>
                             <span className="font-bold text-charcoal">{merchant.brand_slug || 'not-set'}</span>
                         </div>
                         <p className="text-xs text-charcoal/40 mt-2">

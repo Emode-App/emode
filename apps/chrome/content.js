@@ -18,7 +18,7 @@ const ECOM_KEYWORDS = ['ADD TO', 'BAG', 'TOTE', 'BASKET', 'BUY', 'BUY NOW', 'CHE
 
 function isEmodeApp() {
     return window.location.origin === BASE_URL ||
-        window.location.hostname === 'emode.app' ||
+        window.location.hostname === 'emode.style' ||
         window.location.hostname === 'emode.ai' ||
         window.location.hostname === 'localhost' ||
         window.location.pathname.startsWith('/modal');

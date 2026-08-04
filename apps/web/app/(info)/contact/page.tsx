@@ -1,5 +1,6 @@
 import { Metadata } from 'next';
 import { Mail, MapPin, MessageSquare, Terminal } from 'lucide-react';
+import { SUPPORT_EMAIL, API_EMAIL, FOUNDERS_EMAIL } from '../../../lib/site';
 
 export const metadata: Metadata = {
     title: 'Contact Us | emodeAI',
@@ -15,22 +16,22 @@ export default function ContactPage() {
             </div>
 
             <div className="grid grid-cols-1 md:grid-cols-2 gap-8 mb-12">
-                <a href="mailto:support@emode.app" className="group p-8 bg-off-white hover:bg-black/5 rounded-2xl border border-black/5 transition-colors text-center md:text-left">
+                <a href={`mailto:${SUPPORT_EMAIL}`} className="group p-8 bg-off-white hover:bg-black/5 rounded-2xl border border-black/5 transition-colors text-center md:text-left">
                     <div className="w-12 h-12 bg-white rounded-xl shadow-sm border border-black/5 flex items-center justify-center mb-6 mx-auto md:mx-0 group-hover:scale-110 transition-transform">
                         <Mail className="w-5 h-5 text-accent-gold" />
                     </div>
                     <h3 className="text-xl font-heading font-bold mb-2">Support & Billing</h3>
                     <p className="text-sm text-charcoal/60 mb-4">Questions about your plan, stripe invoices, or widget installation?</p>
-                    <span className="text-sm font-bold text-obsidian border-b border-black/10 pb-1">support@emode.app</span>
+                    <span className="text-sm font-bold text-obsidian border-b border-black/10 pb-1">{SUPPORT_EMAIL}</span>
                 </a>
 
-                <a href="mailto:api@emode.app" className="group p-8 bg-off-white hover:bg-black/5 rounded-2xl border border-black/5 transition-colors text-center md:text-left">
+                <a href={`mailto:${API_EMAIL}`} className="group p-8 bg-off-white hover:bg-black/5 rounded-2xl border border-black/5 transition-colors text-center md:text-left">
                     <div className="w-12 h-12 bg-white rounded-xl shadow-sm border border-black/5 flex items-center justify-center mb-6 mx-auto md:mx-0 group-hover:scale-110 transition-transform">
                         <Terminal className="w-5 h-5 text-accent-gold" />
                     </div>
                     <h3 className="text-xl font-heading font-bold mb-2">Developer API</h3>
                     <p className="text-sm text-charcoal/60 mb-4">Building a custom headless integration and need higher rate limits?</p>
-                    <span className="text-sm font-bold text-obsidian border-b border-black/10 pb-1">api@emode.app</span>
+                    <span className="text-sm font-bold text-obsidian border-b border-black/10 pb-1">{API_EMAIL}</span>
                 </a>
             </div>
 
@@ -42,7 +43,7 @@ export default function ContactPage() {
                 <p className="text-white/60 mb-6 relative z-10 max-w-lg">
                     If you are a large-scale e-commerce platform processing over 50,000 try-ons monthly, contact our founder directly for dedicated GPU provisioning and white-glove onboarding.
                 </p>
-                <a href="mailto:founders@emode.app" className="inline-flex btn-primary py-3 px-8 rounded-full text-sm font-bold relative z-10 text-black">
+                <a href={`mailto:${FOUNDERS_EMAIL}`} className="inline-flex btn-primary py-3 px-8 rounded-full text-sm font-bold relative z-10 text-black">
                     Contact Founders
                 </a>
             </div>

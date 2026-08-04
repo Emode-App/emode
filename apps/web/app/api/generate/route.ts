@@ -2,6 +2,7 @@ import { NextResponse } from 'next/server';
 import { createHmac } from 'crypto';
 import { aiEngine } from '../../../lib/ai-engine';
 import { createClient } from '@supabase/supabase-js';
+import { SITE_HOST } from '../../../lib/site';
 
 const corsHeaders = {
     'Access-Control-Allow-Origin': '*',
@@ -105,7 +106,7 @@ async function resolveSubject(merchantId: string, userId: string | null): Promis
             .maybeSingle();
 
         if (!entitlement) {
-            return { error: 'No active plan found. Please subscribe at emode.app', status: 401, limit: 0 };
+            return { error: `No active plan found. Please subscribe at ${SITE_HOST}`, status: 401, limit: 0 };
         }
 
         return {

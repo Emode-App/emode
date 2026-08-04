@@ -1,3 +1,9 @@
+// emode's public origin. This script is a standalone IIFE served to third-party
+// sites, so it cannot read env vars at runtime — the value is baked in at build
+// time. Mirror any change in apps/web/lib/site.ts and rebuild with
+// `npm run build` in apps/widget (which also copies to apps/web/public).
+const EMODE_ORIGIN = 'https://emode.style';
+
 interface WidgetConfig {
     merchantId: string;
     productSelector?: string;
@@ -21,7 +27,7 @@ class EmodeWidget {
             window.location.protocol === 'file:';
         // Force http for localhost to avoid mixed content issues if testing from http
         // But if testing from file://, strict http:// is needed.
-        this.baseUrl = isDev ? 'http://localhost:3000' : 'https://emode.app';
+        this.baseUrl = isDev ? 'http://localhost:3000' : EMODE_ORIGIN;
         console.log('[EmodeWidget] BaseURL:', this.baseUrl);
 
         this.init();

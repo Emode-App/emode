@@ -2,6 +2,7 @@ import { AlertTriangle, Sparkles, Code2, ShoppingBag } from 'lucide-react';
 import Link from 'next/link';
 import { getMerchantForUser } from '../admin-util';
 import { WidgetInstallCode } from '../components/WidgetInstallCode';
+import { SITE_URL } from '../../../lib/site';
 
 export const dynamic = 'force-dynamic';
 
@@ -83,7 +84,7 @@ export default async function InstallPage() {
                 </p>
                 <div className="bg-obsidian rounded-xl p-4">
                     <pre className="text-gray-400 text-xs font-mono overflow-x-auto whitespace-pre-wrap">{`<script
-  src="https://emode.app/widget.js"
+  src="${SITE_URL}/widget.js"
   data-emode-merchant="${merchantId || 'YOUR_MERCHANT_ID'}"
   data-product-selector=".my-product-card"
   data-title-selector=".my-product-title"

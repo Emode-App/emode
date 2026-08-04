@@ -1,4 +1,5 @@
 'use client';
+import { SITE_URL } from '../../../lib/site';
 
 import { useState, useEffect } from 'react';
 import { useSearchParams } from 'next/navigation';
@@ -68,7 +69,7 @@ export default function OnboardingPage() {
         setTimeout(() => setStep('install'), 1000);
     };
 
-    const widgetCode = `<script src="${typeof window !== 'undefined' ? window.location.origin : 'https://emode.app'}/widget.js" data-emode-merchant="${merchantId || 'YOUR_MERCHANT_ID'}"></script>`;
+    const widgetCode = `<script src="${typeof window !== 'undefined' ? window.location.origin : SITE_URL}/widget.js" data-emode-merchant="${merchantId || 'YOUR_MERCHANT_ID'}"></script>`;
 
     const handleCopy = () => {
         navigator.clipboard.writeText(widgetCode);

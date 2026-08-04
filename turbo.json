@@ -15,6 +15,7 @@
             // NEXT_PUBLIC_* would come through via framework inference, but is
             // listed explicitly so the build hash tracks it too.
             "env": [
+                "NEXT_PUBLIC_EMODE_URL",
                 "GOOGLE_API_KEY",
                 "NEXT_PUBLIC_SUPABASE_URL",
                 "NEXT_PUBLIC_SUPABASE_ANON_KEY",

@@ -30,7 +30,7 @@
 <script>
 (function() {
   // ── Config ──
-  var EMODE_HOST = '{{ block.settings.emode_host | default: "https://emode.app" }}';
+  var EMODE_HOST = '{{ block.settings.emode_host | default: "https://emode.style" }}';
   var SHOP_DOMAIN = '{{ shop.permanent_domain }}';
 
   // ── Build modal URL from button data attributes ──
@@ -155,7 +155,7 @@
       "type": "text",
       "id": "emode_host",
       "label": "Emode App URL",
-      "default": "https://emode.app",
+      "default": "https://emode.style",
       "info": "The URL of your emodeAI instance. Change to localhost:3000 for development."
     }
   ]

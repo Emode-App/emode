@@ -94,7 +94,7 @@ function renderLoginState() {
     wardrobeGrid.innerHTML = `
         <div class="empty-state" style="border-style: solid; border-color: #6366f1; background: rgba(99, 102, 241, 0.05); grid-column: span 2;">
             <p style="color: #6366f1; font-weight: 700; margin-bottom: 8px;">Login Required</p>
-            <p style="margin-bottom: 16px;">Sign in to emode.app to see your Cloud Closet.</p>
+            <p style="margin-bottom: 16px;">Sign in to emode.style to see your Cloud Closet.</p>
             <button id="btn-login-sidebar" class="btn-try-on" style="margin-top: 0;">Sign In</button>
         </div>
     `;
