@@ -5,11 +5,15 @@ import { AreaChart, Area, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContai
 import { supabase } from '../../../lib/supabase/browser';
 import { BarChart3, TrendingUp, Calendar, Zap, Activity } from 'lucide-react';
 
+// Mirrors the usage_counters table. The daily total lives in
+// `generations_used` — this type previously declared `count`, so every read was
+// undefined and the summary rendered NaN while the chart plotted nothing.
 export type UsageData = {
     id: string;
     subject_id: string;
+    subject_type: string;
     date: string;
-    count: number;
+    generations_used: number;
 };
 
 export function RealtimeAnalytics({ initialData, merchantId }: { initialData: UsageData[], merchantId?: string }) {
@@ -23,11 +27,11 @@ export function RealtimeAnalytics({ initialData, merchantId }: { initialData: Us
             .sort((a, b) => new Date(a.date).getTime() - new Date(b.date).getTime())
             .map(d => ({
                 date: new Date(d.date).toLocaleDateString('en-US', { month: 'short', day: 'numeric' }),
-                Generations: d.count,
+                Generations: d.generations_used ?? 0,
             }));
     }, [data]);
 
-    const totalGenerationsInPeriod = data.reduce((acc, curr) => acc + curr.count, 0);
+    const totalGenerationsInPeriod = data.reduce((acc, curr) => acc + (curr.generations_used ?? 0), 0);
 
     useEffect(() => {
         // Subscribe to real-time changes

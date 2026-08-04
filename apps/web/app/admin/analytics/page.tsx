@@ -6,15 +6,24 @@ export const dynamic = 'force-dynamic';
 export default async function AdminAnalyticsPage() {
     const merchant = await getMerchantForUser();
 
-    // Fetch the last 30 days of usage from usage_counters
+    // Fetch the last 30 days of usage from usage_counters.
+    // Bounded by date rather than just limit(30): the table holds one row per
+    // subject per day, so a limit alone would start dropping recent days once
+    // more than one subject type is present.
+    const since = new Date(Date.now() - 30 * 24 * 60 * 60 * 1000)
+        .toISOString()
+        .split('T')[0];
+
     const query = serviceClient
         .from('usage_counters')
         .select('*')
-        .order('date', { ascending: false })
-        .limit(30);
+        .gte('date', since)
+        .order('date', { ascending: false });
 
     if (merchant) {
-        query.eq('subject_id', merchant.id);
+        // subject_type matters: 'ip' rows share this table and would otherwise
+        // inflate a merchant's numbers.
+        query.eq('subject_id', merchant.id).eq('subject_type', 'merchant');
     }
 
     const { data: usage } = await query;
