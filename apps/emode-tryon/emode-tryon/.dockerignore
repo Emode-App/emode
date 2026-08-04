@@ -1,3 +1,27 @@
 .cache
 build
 node_modules
+
+# Never bake secrets into the image. `COPY . .` would otherwise include .env —
+# which holds the Supabase service role key and the database password — and
+# anyone who can pull the image could read them. Runtime config comes from
+# `fly secrets set` instead.
+.env
+.env.*
+!.env.example
+
+# Local-only state
+prisma/dev.sqlite
+.shopify
+.vscode
+*.bak
+shopify.app.toml.*
+shopify.extension.toml.*
+
+# Extensions ship to Shopify via `shopify app deploy`, not from this container.
+extensions
+
+.git
+.gitignore
+README.md
+CHANGELOG.md
