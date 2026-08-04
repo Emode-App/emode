@@ -7,17 +7,29 @@ export const dynamic = 'force-dynamic';
 export default async function AdminProductsPage() {
     const merchant = await getMerchantForUser();
 
-    // Fetch products
+    // Fetch products.
+    //
+    // This previously selected `variants(id, title, price)`. There is no `title`
+    // column on variants, so PostgREST rejected the whole query and returned
+    // null — and because only `data` was destructured, the error was swallowed
+    // and the page rendered "No products found" while the dashboard listed the
+    // same products fine. The join was never used in the markup anyway.
     const query = serviceClient
         .from('products')
-        .select('*, variants(id, title, price)')
+        .select('*')
         .order('created_at', { ascending: false });
 
     if (merchant) {
         query.eq('merchant_id', merchant.id);
     }
 
-    const { data: products } = await query;
+    const { data: products, error: productsError } = await query;
+
+    if (productsError) {
+        // Surface it rather than showing an empty state that looks like
+        // "you have no products".
+        console.error('[admin/products] Failed to load products:', productsError);
+    }
 
     // Fetch generation counts for each product
     let productStats = products || [];
