@@ -5,8 +5,30 @@ import { authenticate } from "../shopify.server";
 // "Invalid billing configuration" error in the merchant's admin iframe.
 const PLANS = ["Starter", "Pro", "Growth"];
 
+// Development and Plus-partner-sandbox stores cannot be charged real money;
+// attempting it fails with an opaque "Error while billing the store". Test
+// charges are required there and forbidden from counting as revenue on a real
+// store, so the flag has to follow the SHOP, not the deployment environment.
+//
+// An earlier version keyed this off NODE_ENV, which is exactly wrong: the
+// container runs with NODE_ENV=production, so every dev-store upgrade tried to
+// raise a live charge and failed.
+async function isDevelopmentStore(admin) {
+  try {
+    const res = await admin.graphql(
+      `{ shop { plan { partnerDevelopment shopifyPlus } } }`
+    );
+    const plan = (await res.json())?.data?.shop?.plan;
+    return Boolean(plan?.partnerDevelopment);
+  } catch (err) {
+    console.error("[emode] Could not read shop plan, defaulting to test charge:", err);
+    // Safer to fail toward a test charge than to bill someone unexpectedly.
+    return true;
+  }
+}
+
 export const loader = async ({ request }) => {
-  const { billing } = await authenticate.admin(request);
+  const { billing, admin } = await authenticate.admin(request);
   const url = new URL(request.url);
   const requested = url.searchParams.get("plan") || "Pro";
 
@@ -27,15 +49,14 @@ export const loader = async ({ request }) => {
   const appUrl = (process.env.SHOPIFY_APP_URL || url.origin).replace(/\/+$/, "");
   const returnUrl = `${appUrl}/app`;
 
+  const isTest = await isDevelopmentStore(admin);
+
   try {
     // billing.request throws a redirect to Shopify's confirmation page, so a
     // Response escaping here is the success path, not a failure.
     return await billing.request({
       plan,
-      // Test charges against development stores, real ones in production.
-      // Hardcoding `true` would mean live merchants confirm a subscription and
-      // are never actually charged.
-      isTest: process.env.NODE_ENV !== "production",
+      isTest,
       returnUrl,
     });
   } catch (err) {
