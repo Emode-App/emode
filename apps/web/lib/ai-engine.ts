@@ -56,6 +56,23 @@ class AIEngine {
             }
         }
 
+        // Shopify's `image_url` Liquid filter emits protocol-relative URLs
+        // ("//shop.myshopify.com/cdn/..."). A browser resolves those against the
+        // page, so the product thumbnail renders correctly and nothing looks
+        // wrong — but Node's fetch has no base URL to resolve against and fails
+        // with "Failed to parse URL". Normalize before fetching so every caller
+        // (theme extension, widget, extension) is covered.
+        if (url.startsWith('//')) {
+            url = `https:${url}`;
+        }
+
+        if (!/^https?:\/\//i.test(url)) {
+            throw new Error(
+                `Product image URL is not absolute (${url.substring(0, 80)}). ` +
+                `It must start with http:// or https://.`
+            );
+        }
+
         // Otherwise fetch the URL
         console.log("[Nano Banana Pro] Fetching image URL:", url.substring(0, 80));
         try {
