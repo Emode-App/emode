@@ -19,6 +19,14 @@ export const loader = async ({ request }) => {
     );
   }
 
+  // Shopify types returnUrl as URL! and rejects a relative path outright:
+  //   INVALID_VARIABLE — Invalid url '/app', missing scheme
+  // Prefer SHOPIFY_APP_URL (the tunnel under `shopify app dev`, the Fly host in
+  // production) and fall back to this request's own origin so the flow still
+  // works if the env var is ever missing.
+  const appUrl = (process.env.SHOPIFY_APP_URL || url.origin).replace(/\/+$/, "");
+  const returnUrl = `${appUrl}/app`;
+
   try {
     // billing.request throws a redirect to Shopify's confirmation page, so a
     // Response escaping here is the success path, not a failure.
@@ -28,7 +36,7 @@ export const loader = async ({ request }) => {
       // Hardcoding `true` would mean live merchants confirm a subscription and
       // are never actually charged.
       isTest: process.env.NODE_ENV !== "production",
-      returnUrl: "/app",
+      returnUrl,
     });
   } catch (err) {
     // Re-throw redirects untouched — that is billing.request succeeding.
