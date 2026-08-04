@@ -1,15 +1,12 @@
 {% comment %}
-  Styling is deliberately restrained. These buttons sit next to the merchant's
-  own Add to cart / Buy it now, and an app block that visually outranks the
-  store's purchase CTA both hurts the merchant's conversion and reads as
-  hijacking the page during App Store review.
+  Try-on keeps the brand gradient — it is the action worth drawing the eye to.
+  Dressing Room is deliberately lighter: white fill with a gold shimmer border,
+  so the pair reads as premium without either one competing with the theme's own
+  Add to cart / Buy it now for the primary-action slot.
 
-  So: secondary weight, no heavy fills or drop shadows, and no solid-black
-  button (Shopify's own "Buy it now" is black — two of them side by side is
-  genuinely confusing). The brand gradient survives as a thin accent border on
-  the primary action rather than a full-bleed fill.
-
-  Labels are short and nowrap so the pair always renders as one even row.
+  Styles live in a <style> block rather than inline because the shimmer needs
+  @keyframes, which inline style attributes cannot express. Class names are
+  prefixed to avoid collisions with the merchant's theme CSS.
 {% endcomment %}
 {%- liquid
   assign max_w = block.settings.max_width | default: 0
@@ -31,32 +28,84 @@
   structure varies too much to detect, so width and alignment are merchant
   settings; leaving max width at 0 keeps the previous full-width behaviour.
 {% endcomment %}
-<div class="emode-buttons" style="{{ wrap_style }} display: flex; gap: 8px; font-family: inherit;">
+<style>
+  .emode-btn {
+    flex: 1;
+    min-width: 0;
+    padding: 13px 12px;
+    border-radius: 10px;
+    font-weight: 700;
+    font-size: 13px;
+    line-height: 1.2;
+    letter-spacing: 0.03em;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    cursor: pointer;
+    font-family: inherit;
+    transition: transform 0.15s ease, box-shadow 0.15s ease, filter 0.15s ease;
+  }
+  .emode-btn:hover { transform: translateY(-1px); }
+  .emode-btn:active { transform: translateY(0); }
+
+  .emode-btn--tryon {
+    background: linear-gradient(135deg, #6366f1 0%, #a855f7 100%);
+    color: #fff;
+    border: none;
+    box-shadow: 0 3px 12px rgba(99, 102, 241, 0.28);
+  }
+  .emode-btn--tryon:hover { box-shadow: 0 5px 18px rgba(99, 102, 241, 0.38); }
+
+  /* White fill with an animated gold border. Two background layers: the solid
+     white sits in the padding box, the moving gradient in the border box, so the
+     border shimmers while the face stays clean. */
+  .emode-btn--dressing {
+    color: #9a7212;
+    border: 1.6px solid transparent;
+    background:
+      linear-gradient(#fff, #fff) padding-box,
+      linear-gradient(100deg, #b8860b, #f7e07a, #b8860b, #f7e07a, #b8860b) border-box;
+    background-size: 100% 100%, 300% 100%;
+    animation: emodeShimmer 4s linear infinite;
+  }
+  .emode-btn--dressing:hover { filter: brightness(1.04); }
+
+  @keyframes emodeShimmer {
+    from { background-position: 0% 50%, 0% 50%; }
+    to   { background-position: 0% 50%, 300% 50%; }
+  }
+
+  /* Respect users who ask the OS to reduce motion — an infinitely animating
+     border is exactly the kind of thing that setting exists for. */
+  @media (prefers-reduced-motion: reduce) {
+    .emode-btn { transition: none; }
+    .emode-btn:hover { transform: none; }
+    .emode-btn--dressing { animation: none; }
+  }
+</style>
+
+<div class="emode-buttons" style="{{ wrap_style }} display: flex; gap: 8px;">
   <button
     type="button"
     id="emode-try-on"
-    style="flex: 1; min-width: 0; padding: 11px 12px; background: #ffffff; color: #111; border: 1.5px solid #6366f1; border-radius: 8px; font-weight: 600; font-size: 13px; line-height: 1.2; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; cursor: pointer; transition: background 0.15s ease, border-color 0.15s ease;"
+    class="emode-btn emode-btn--tryon"
     data-product-id="{{ product.id }}"
     data-variant-id="{{ product.selected_or_first_available_variant.id }}"
     data-product-title="{{ product.title | escape }}"
     data-product-image="{{ product.featured_image | image_url: width: 800, height: 800 }}"
     data-product-price="{{ product.price | money }}"
-    onmouseover="this.style.background='#f5f4ff';this.style.borderColor='#4f46e5'"
-    onmouseout="this.style.background='#ffffff';this.style.borderColor='#6366f1'"
   >
     ✨ Try This On
   </button>
   <button
     type="button"
     id="emode-add-to-dressing-room"
-    style="flex: 1; min-width: 0; padding: 11px 12px; background: #ffffff; color: #444; border: 1.5px solid rgba(0,0,0,0.16); border-radius: 8px; font-weight: 600; font-size: 13px; line-height: 1.2; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; cursor: pointer; transition: background 0.15s ease, border-color 0.15s ease;"
+    class="emode-btn emode-btn--dressing"
     data-product-id="{{ product.id }}"
     data-variant-id="{{ product.selected_or_first_available_variant.id }}"
     data-product-title="{{ product.title | escape }}"
     data-product-image="{{ product.featured_image | image_url: width: 800, height: 800 }}"
     data-product-price="{{ product.price | money }}"
-    onmouseover="this.style.background='#fafafa';this.style.borderColor='rgba(0,0,0,0.3)'"
-    onmouseout="this.style.background='#ffffff';this.style.borderColor='rgba(0,0,0,0.16)'"
   >
     👗 Dressing Room
   </button>
