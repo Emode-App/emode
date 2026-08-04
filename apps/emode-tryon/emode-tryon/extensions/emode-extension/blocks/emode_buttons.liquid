@@ -4,7 +4,15 @@
   so the pair reads as premium without either one competing with the theme's own
   Add to cart / Buy it now for the primary-action slot.
 
-  Styles live in a <style> block rather than inline because the shimmer needs
+  Styles live in a {% comment %}
+  The font ships as a data URI inside emode-fonts.css because Shopify theme app
+  extensions reject .woff2 in assets/ ("Only these filetypes are supported:
+  .jpg, .jpeg, .json, .js, .css, .png, .svg, .wasm"). Regenerate that file with
+  scripts/build-font-css.js after changing the font.
+{% endcomment %}
+{{ 'emode-fonts.css' | asset_url | stylesheet_tag }}
+
+<style> block rather than inline because the shimmer needs
   @keyframes, which inline style attributes cannot express. Class names are
   prefixed to avoid collisions with the merchant's theme CSS.
 {% endcomment %}
@@ -29,22 +37,6 @@
   settings; leaving max width at 0 keeps the previous full-width behaviour.
 {% endcomment %}
 <style>
-  /* Self-hosted rather than loaded from Google's CDN. A third-party font
-     request on a merchant's storefront costs a DNS lookup plus a round trip on
-     every product page, and fonts.googleapis.com has been ruled a GDPR problem
-     in some EU jurisdictions — not a liability to hand to merchants.
-     Syne is SIL Open Font Licensed, so embedding and redistributing it inside a
-     distributed app is permitted; most display faces are not.
-     font-display: swap so the buttons render immediately in the fallback and
-     never block interaction. */
-  @font-face {
-    font-family: 'Syne';
-    src: url('{{ "syne-bold.woff2" | asset_url }}') format('woff2');
-    font-weight: 700;
-    font-style: normal;
-    font-display: swap;
-  }
-
   .emode-btn {
     flex: 1;
     min-width: 0;
