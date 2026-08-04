@@ -19,13 +19,35 @@ export const loader = async ({ request }) => {
     );
   }
 
-  // billing.request throws a redirect to Shopify's confirmation page.
-  return billing.request({
-    plan,
-    // Test charges against development stores, real ones in production.
-    // Hardcoding `true` would mean live merchants confirm a subscription and
-    // are never actually charged.
-    isTest: process.env.NODE_ENV !== "production",
-    returnUrl: "/app",
-  });
+  try {
+    // billing.request throws a redirect to Shopify's confirmation page, so a
+    // Response escaping here is the success path, not a failure.
+    return await billing.request({
+      plan,
+      // Test charges against development stores, real ones in production.
+      // Hardcoding `true` would mean live merchants confirm a subscription and
+      // are never actually charged.
+      isTest: process.env.NODE_ENV !== "production",
+      returnUrl: "/app",
+    });
+  } catch (err) {
+    // Re-throw redirects untouched — that is billing.request succeeding.
+    if (err instanceof Response) throw err;
+
+    // Shopify's client nests the useful part in graphQLErrors, which Node's
+    // console prints as "[Array]" at default depth — so a real billing failure
+    // showed up in the logs as an unreadable blob. Flatten it explicitly.
+    const gql = err?.graphQLErrors || err?.body?.errors || err?.errors?.graphQLErrors;
+    console.error(
+      "[emode] billing.request failed for plan",
+      plan,
+      "\n  message:", err?.message,
+      "\n  graphQLErrors:", JSON.stringify(gql, null, 2)
+    );
+
+    throw new Response(
+      `Could not start the ${plan} subscription. ${err?.message || "Unknown billing error."}`,
+      { status: 500 }
+    );
+  }
 };
