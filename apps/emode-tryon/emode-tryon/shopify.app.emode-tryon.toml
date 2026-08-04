@@ -2,7 +2,7 @@
 
 client_id = "a8bdc109e414119e97ece1a0ab1b0df1"
 name = "emode-tryon"
-application_url = "https://example.com"
+application_url = "https://emode-tryon.fly.dev"
 embedded = true
 
 [build]
@@ -44,4 +44,4 @@ optional_scopes = [ ]
 use_legacy_install_flow = false
 
 [auth]
-redirect_urls = [ "https://example.com/api/auth" ]
+redirect_urls = [ "https://emode-tryon.fly.dev/auth/callback" ]

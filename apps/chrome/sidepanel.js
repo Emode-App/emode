@@ -1,8 +1,10 @@
 // emodeAI | Side Panel Script
 
-// ⚠️ SHIP-TIME TODO: flip this default to 'https://<your-production-domain>'
-// before submitting to the Chrome Web Store (see content.js for the override).
-let BASE_URL = 'http://localhost:3001';
+// Points at production; see the storage override below for local work.
+// Live origin. www is canonical — the apex 308-redirects to it, and an
+// extra hop on every API call is wasteful. Override for local work with:
+//   chrome.storage.local.set({ emode_dev_base_url: 'http://localhost:3000' })
+let BASE_URL = 'https://www.emode.style';
 
 // State
 let activeProduct = {

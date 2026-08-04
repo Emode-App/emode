@@ -7,7 +7,10 @@ console.log('emodeAI | Universal Widget Active.');
 // no live deployment. The storage override below works in either direction:
 // chrome.storage.local.set({ emode_dev_base_url: '<url>' }) in the service
 // worker console.
-let BASE_URL = 'http://localhost:3001';
+// Live origin. www is canonical — the apex 308-redirects to it, and an
+// extra hop on every API call is wasteful. Override for local work with:
+//   chrome.storage.local.set({ emode_dev_base_url: 'http://localhost:3000' })
+let BASE_URL = 'https://www.emode.style';
 try {
     chrome.storage?.local?.get('emode_dev_base_url', (result) => {
         if (result && result.emode_dev_base_url) BASE_URL = result.emode_dev_base_url;
