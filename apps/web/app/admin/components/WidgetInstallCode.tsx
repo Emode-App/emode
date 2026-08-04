@@ -117,9 +117,13 @@ Do not change anything else about the site's styling or layout.`;
 
             {tab === 'snippet' && (
                 <>
-                    <p className="text-sm text-charcoal/60 mb-6">
+                    <p className="text-sm text-charcoal/60 mb-2">
                         Paste this just before the closing <code>&lt;/body&gt;</code> tag, on every
                         page. It detects your products automatically — no configuration.
+                    </p>
+                    <p className="text-xs text-charcoal/40 mb-6">
+                        Works on <code>localhost</code> before you launch, so you can build your
+                        store with emode already in it.
                     </p>
                     <div className="relative rounded-xl overflow-hidden shadow-inner border border-black/10">
                         <SyntaxHighlighter
