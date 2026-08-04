@@ -63,15 +63,29 @@ export const loader = async ({ request }) => {
     // Re-throw redirects untouched — that is billing.request succeeding.
     if (err instanceof Response) throw err;
 
-    // Shopify's client nests the useful part in graphQLErrors, which Node's
-    // console prints as "[Array]" at default depth — so a real billing failure
-    // showed up in the logs as an unreadable blob. Flatten it explicitly.
-    const gql = err?.graphQLErrors || err?.body?.errors || err?.errors?.graphQLErrors;
+    // Shopify puts the actual reason in different places depending on failure
+    // type — graphQLErrors for query validation, errorData/body for a rejected
+    // charge — and Node's console collapses nested objects to "[Array]" at
+    // default depth. Rather than guess which field it is this time, dump every
+    // own property, including non-enumerable ones like `errorData`.
+    const dump = {};
+    for (const key of Object.getOwnPropertyNames(err || {})) {
+      if (key === "stack") continue;
+      try {
+        dump[key] = err[key];
+      } catch {
+        dump[key] = "<unreadable>";
+      }
+    }
+
     console.error(
       "[emode] billing.request failed for plan",
       plan,
+      "\n  name:", err?.name,
       "\n  message:", err?.message,
-      "\n  graphQLErrors:", JSON.stringify(gql, null, 2)
+      "\n  isTest:", isTest,
+      "\n  returnUrl:", returnUrl,
+      "\n  full:", JSON.stringify(dump, null, 2)
     );
 
     throw new Response(
