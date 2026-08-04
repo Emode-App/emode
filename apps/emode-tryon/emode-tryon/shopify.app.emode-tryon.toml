@@ -26,14 +26,30 @@ api_version = "2026-04"
   #
   # `shopify app config link` and `--reset` wipe this along with access_scopes,
   # so re-check both sections after running either.
-  # Try-on attribution. read_orders is required for these; see access_scopes.
-  [[webhooks.subscriptions]]
-  topics = [ "orders/create" ]
-  uri = "/webhooks/orders/create"
-
-  [[webhooks.subscriptions]]
-  topics = [ "refunds/create" ]
-  uri = "/webhooks/refunds/create"
+  # ── Try-on attribution — BLOCKED PENDING SHOPIFY APPROVAL ────────────────
+  # orders/create and refunds/create are protected customer data topics.
+  # `shopify app deploy` REJECTS the whole version while they are declared and
+  # the app is unapproved ("This app is not approved to subscribe to webhook
+  # topics containing protected customer data") — this is not merely a runtime
+  # restriction, and it blocks development stores too.
+  #
+  # To enable: Partner dashboard -> this app -> API access -> Protected
+  # customer data access -> request Level 1 plus the "Orders" data field,
+  # stating the use case (attributing try-ons to purchases for merchant
+  # analytics). Once approved, uncomment these and restore read_orders in
+  # access_scopes below, then redeploy and re-authorize the app.
+  #
+  # The handlers already exist at app/routes/webhooks.orders.create.jsx and
+  # webhooks.refunds.create.jsx, and visitor ids are already recorded on
+  # generations and cart attributes, so switching this on is config-only.
+  #
+  # [[webhooks.subscriptions]]
+  # topics = [ "orders/create" ]
+  # uri = "/webhooks/orders/create"
+  #
+  # [[webhooks.subscriptions]]
+  # topics = [ "refunds/create" ]
+  # uri = "/webhooks/refunds/create"
 
   [webhooks.privacy_compliance]
   customer_data_request_url = "/webhooks/customers/data_request"
@@ -47,12 +63,11 @@ api_version = "2026-04"
 # app gets granted nothing and syncProducts() in app/routes/app._index.jsx fails
 # with a permissions error while everything else looks fine. `shopify app config
 # link` and `--reset` both blank this out — re-check it after either.
-# read_orders powers try-on → purchase attribution. Note it is a PROTECTED
-# CUSTOMER DATA scope: it works immediately on development and custom-install
-# stores, but public App Store distribution requires an approved protected
-# customer data request from Shopify. Adding it also re-prompts existing
-# merchants for authorization.
-scopes = "write_products,read_products,read_orders"
+# read_orders is removed until Shopify approves protected customer data access
+# for this app — see the webhooks section above. Restore it to
+# "write_products,read_products,read_orders" at the same time as the order
+# webhooks; the app must then be re-authorized on each installed store.
+scopes = "write_products,read_products"
 optional_scopes = [ ]
 use_legacy_install_flow = false
 
