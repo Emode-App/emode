@@ -231,6 +231,7 @@ export const loader = async ({ request }) => {
   const activePlan = billingCheck.appSubscriptions[0]?.name || "Starter";
 
   let productCount = 0;
+  let hasTryOns = false;
   if (merchant) {
     // 4. Sync the Shopify billing plan into the emode entitlement — this is what
     // /api/generate actually enforces, so an upgrade via Shopify billing must
@@ -286,19 +287,34 @@ export const loader = async ({ request }) => {
     if (productCount === 0) {
       productCount = await syncProducts(admin, merchant, shop, limits.marketplace);
     }
+
+    // Has a shopper ever completed a try-on for this shop? A generation can only
+    // originate from the theme extension (or the widget), so its existence is
+    // proof the block is installed and working.
+    //
+    // Inferring beats detecting here: actually reading the published theme's
+    // settings_data.json would require the read_themes scope, and adding a scope
+    // forces every existing merchant through a re-authorization prompt — a lot
+    // of friction to render one banner.
+    const { count: genCount } = await supabase
+      .from("generations")
+      .select("*", { count: "exact", head: true })
+      .eq("merchant_id", merchant.id);
+    hasTryOns = (genCount || 0) > 0;
   }
 
   return {
     merchant,
     activePlan,
     productCount,
+    hasTryOns,
     // Shown so the merchant knows which email opens their emode dashboard.
     ownerLinked: Boolean(merchant?.owner_user_id),
   };
 };
 
 export default function Index() {
-  const { merchant, activePlan, productCount, ownerLinked } = useLoaderData();
+  const { merchant, activePlan, productCount, ownerLinked, hasTryOns } = useLoaderData();
 
   return (
     <Page>
@@ -355,6 +371,20 @@ export default function Index() {
           </Layout.Section>
 
           <Layout.Section>
+            {hasTryOns ? (
+              <Banner title="Theme extension is live" tone="success">
+                <p>
+                  Shoppers have completed try-ons on your storefront, so the{" "}
+                  <b>emodeAI Buttons</b> block is installed and working. Use the
+                  Theme Editor below if you want to move or restyle it.
+                </p>
+                <Box paddingBlockStart="200">
+                  <Button url={`shopify:admin/themes/current/editor?context=apps`} target="_blank">
+                    Open Theme Editor
+                  </Button>
+                </Box>
+              </Banner>
+            ) : (
             <Banner title="Action Required: Activate Theme Extension" tone="warning">
               <p>
                 To show the try-on buttons on your product pages, you must go to your Theme Editor 
@@ -369,6 +399,7 @@ export default function Index() {
                 </Button>
               </Box>
             </Banner>
+            )}
           </Layout.Section>
         </Layout>
       </BlockStack>

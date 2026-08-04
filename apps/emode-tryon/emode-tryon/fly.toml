@@ -1,39 +1,25 @@
-# Fly config for the emode Shopify embedded admin app.
+# fly.toml app configuration file generated for emode-tryon on 2026-08-04T14:31:06-04:00
 #
-# This is NOT emode.style — that is apps/web on Vercel. This container serves
-# only the admin screen Shopify renders in an iframe, plus the webhook
-# endpoints Shopify calls. Both share the same Supabase database.
+# See https://fly.io/docs/reference/configuration/ for information about how to use this file.
 #
-# Rename `app` if "emode-tryon" is already taken on Fly; whatever you pick
-# becomes <app>.fly.dev, which must then be set as SHOPIFY_APP_URL and as
-# application_url in shopify.app.emode-tryon.toml.
 
-app = "emode-tryon"
-primary_region = "iad"
+app = 'emode-tryon'
+primary_region = 'iad'
 
 [build]
-  dockerfile = "Dockerfile"
+  dockerfile = 'Dockerfile'
+
+[deploy]
+  strategy = 'immediate'
 
 [http_service]
   internal_port = 3000
   force_https = true
+  auto_stop_machines = 'suspend'
   auto_start_machines = true
-
-  # Deliberately kept warm rather than scaling to zero. Shopify expects webhook
-  # responses within ~5s and treats repeated timeouts as delivery failures; a
-  # cold container start can exceed that. The GDPR webhooks in particular are
-  # checked during App Store review. One shared-cpu machine is roughly $2/mo —
-  # cheap insurance against intermittent review failures.
-  auto_stop_machines = "suspend"
   min_machines_running = 1
-  processes = ["app"]
+  processes = ['app']
 
 [[vm]]
-  size = "shared-cpu-1x"
-  memory = "512mb"
-
-[deploy]
-  # Migrations run via `npm run docker-start` on boot rather than as a release
-  # command, so a single machine handles both. Revisit if this ever scales past
-  # one instance — concurrent `prisma migrate deploy` runs would race.
-  strategy = "immediate"
+  size = 'shared-cpu-1x'
+  memory = '512mb'
