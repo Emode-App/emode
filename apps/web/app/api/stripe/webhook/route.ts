@@ -1,6 +1,7 @@
 import { NextResponse } from 'next/server';
 import Stripe from 'stripe';
 import { createClient } from '@supabase/supabase-js';
+import { PLAN_CONFIG } from '../../../../lib/stripe-plan-config';
 
 const stripe = new Stripe(process.env.STRIPE_SECRET_KEY!, {
     apiVersion: '2023-10-16' as any,
@@ -9,19 +10,6 @@ const supabase = createClient(
     process.env.NEXT_PUBLIC_SUPABASE_URL!,
     process.env.SUPABASE_SERVICE_ROLE_KEY || process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!
 );
-
-// Plan limits matching checkout route config
-const PLAN_LIMITS: Record<string, { dailyLimit: number; unlimited: boolean }> = {
-    starter: { dailyLimit: 50, unlimited: false },
-    pro: { dailyLimit: 200, unlimited: false },
-    growth: { dailyLimit: 0, unlimited: true },
-    lifetime_starter: { dailyLimit: 50, unlimited: false },
-    lifetime_pro: { dailyLimit: 200, unlimited: false },
-    lifetime_founder: { dailyLimit: 0, unlimited: true },
-};
-
-// Plans that include marketplace visibility
-const MARKETPLACE_PLANS = ['pro', 'growth', 'lifetime_pro', 'lifetime_founder'];
 
 function slugify(text: string): string {
     return text
@@ -55,17 +43,47 @@ export async function POST(request: Request) {
         switch (event.type) {
             case 'checkout.session.completed': {
                 const session = event.data.object as Stripe.Checkout.Session;
-                const { planId, shopDomain, platform, marketplaceAccess } = session.metadata || {};
+                const { planId, shopDomain, platform, marketplaceAccess, userId } = session.metadata || {};
 
                 if (!planId) break;
 
-                const limits = PLAN_LIMITS[planId] || { dailyLimit: 5, unlimited: false };
-                const customerEmail = session.customer_details?.email || session.customer_email;
+                const planConfig = PLAN_CONFIG[planId];
+                const limits = planConfig
+                    ? { dailyLimit: planConfig.dailyLimit, unlimited: planConfig.unlimited }
+                    : { dailyLimit: 5, unlimited: false };
                 const stripeCustomerId = session.customer as string;
 
-                // Try to find existing Supabase user by email to link
-                let ownerUserId: string | null = null;
-                if (customerEmail) {
+                // ── Consumer plan: attach the entitlement directly to the buyer's
+                // Supabase user id. No merchant/shop is involved (e.g. Chrome extension).
+                if (planConfig?.subjectType === 'user') {
+                    if (!userId) {
+                        console.error('[Stripe Webhook] Consumer checkout completed with no userId in metadata — cannot grant entitlement.');
+                        break;
+                    }
+
+                    await supabase.from('entitlements').insert({
+                        subject_type: 'user',
+                        subject_id: userId,
+                        plan: planId,
+                        daily_generation_limit: limits.dailyLimit,
+                        unlimited: limits.unlimited,
+                        renews_at: session.mode === 'subscription'
+                            ? new Date(Date.now() + 30 * 24 * 60 * 60 * 1000).toISOString()
+                            : null,
+                    });
+
+                    console.log(`[Stripe Webhook] Consumer checkout completed: plan=${planId}, user=${userId}`);
+                    break;
+                }
+
+                // ── Merchant plan (existing B2B flow)
+                const customerEmail = session.customer_details?.email || session.customer_email;
+
+                // Link the merchant to the buyer's emode account: prefer the userId the
+                // checkout was initiated with (deterministic); fall back to matching the
+                // Stripe email against Supabase auth users.
+                let ownerUserId: string | null = userId || null;
+                if (!ownerUserId && customerEmail) {
                     try {
                         const { data: authData } = await supabase.auth.admin.listUsers();
                         const users = (authData as any)?.users || [];
@@ -119,7 +137,7 @@ export async function POST(request: Request) {
                     });
 
                     // 4. If plan includes marketplace, mark existing products as visible
-                    if (marketplaceAccess === 'true' || MARKETPLACE_PLANS.includes(planId)) {
+                    if (marketplaceAccess === 'true' || planConfig?.marketplaceAccess) {
                         await supabase
                             .from('products')
                             .update({ marketplace_visible: true })
@@ -134,6 +152,18 @@ export async function POST(request: Request) {
             case 'customer.subscription.deleted': {
                 const subscription = event.data.object as Stripe.Subscription;
                 const stripeCustomerId = subscription.customer as string;
+                const subUserId = subscription.metadata?.userId;
+
+                // Consumer plan: revoke the user's own entitlement directly (no merchant involved)
+                if (subUserId) {
+                    await supabase
+                        .from('entitlements')
+                        .delete()
+                        .eq('subject_id', subUserId)
+                        .eq('subject_type', 'user');
+                    console.log(`[Stripe Webhook] Consumer subscription cancelled: user=${subUserId}, entitlement revoked`);
+                    break;
+                }
 
                 // Find merchant by stripe_customer_id
                 const { data: merchant } = await supabase

@@ -1,4 +1,5 @@
 import { NextResponse } from 'next/server';
+import { createHmac } from 'crypto';
 import { aiEngine } from '../../../lib/ai-engine';
 import { createClient } from '@supabase/supabase-js';
 
@@ -7,6 +8,17 @@ const corsHeaders = {
     'Access-Control-Allow-Methods': 'POST, OPTIONS',
     'Access-Control-Allow-Headers': 'Content-Type, Authorization',
 };
+
+// Free tier default for consumers with no entitlement row yet (mirrors docs/prd.md — 5/day)
+const FREE_TIER_DAILY_LIMIT = 5;
+
+// Hard per-IP ceiling applied to every request regardless of plan. This is not
+// the product's rate limit — it is the abuse backstop that stops one client
+// from running up an unbounded Gemini bill, either by cycling guestIds (which
+// are client-generated and therefore free to forge) or by hammering an
+// unlimited merchant's widget. Set high enough that a real shopper, or a
+// household/office behind one NAT, never reaches it.
+const IP_DAILY_CEILING = Number(process.env.EMODE_IP_DAILY_CEILING || 40);
 
 // Service role client for entitlement checks
 const supabase = createClient(
@@ -18,84 +30,144 @@ export async function OPTIONS() {
     return NextResponse.json({}, { headers: corsHeaders });
 }
 
-async function checkEntitlement(merchantId: string): Promise<{ allowed: boolean; error?: string; status?: number }> {
-    if (!merchantId) return { allowed: false, error: 'Missing or inactive merchant ID.', status: 401 };
-    
-    // Exception for the landing page interactive demo
-    if (merchantId === 'demo_hero_interactive') return { allowed: true };
+async function getUserIdFromRequest(request: Request): Promise<string | null> {
+    const token = request.headers.get('authorization')?.replace(/^Bearer\s+/i, '');
+    if (!token) return null;
+    const { data: { user } } = await supabase.auth.getUser(token);
+    return user?.id || null;
+}
 
-    // 1. Get merchant's entitlement
-    const { data: entitlement } = await supabase
-        .from('entitlements')
-        .select('daily_generation_limit, unlimited')
-        .eq('subject_id', merchantId)
-        .eq('subject_type', 'merchant')
-        .order('created_at', { ascending: false })
-        .limit(1)
-        .single();
+const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 
-    if (!entitlement) {
-        return { allowed: false, error: 'No active plan found. Please subscribe at emode.app', status: 401 };
+type Subject = { type: 'merchant' | 'user' | 'ip'; id: string };
+
+// The caller's IP, as seen through Vercel's proxy. x-forwarded-for is a chain
+// (client, proxy1, proxy2...) and only the first entry is the real client.
+function getClientIp(request: Request): string | null {
+    const forwarded = request.headers.get('x-forwarded-for');
+    if (forwarded) {
+        const first = forwarded.split(',')[0]?.trim();
+        if (first) return first;
     }
+    return request.headers.get('x-real-ip')?.trim() || null;
+}
 
-    // Unlimited plan — always allowed
-    if (entitlement.unlimited) return { allowed: true };
+// Fold an IP into a stable UUID so it fits usage_counters.subject_id (a uuid
+// column) without ever storing a raw address. Keyed HMAC, not a bare hash —
+// the IPv4 space is small enough to brute-force a plain digest back to the
+// original address.
+function ipToSubjectId(ip: string): string {
+    const secret = process.env.EMODE_IP_HASH_SECRET || process.env.SUPABASE_SERVICE_ROLE_KEY || '';
+    const h = createHmac('sha256', secret).update(ip).digest('hex');
+    return [
+        h.slice(0, 8),
+        h.slice(8, 12),
+        // Stamp version/variant nibbles so this is a well-formed UUID and can
+        // never collide with a real Supabase user or merchant id.
+        '5' + h.slice(13, 16),
+        ((parseInt(h[16], 16) & 0x3 | 0x8).toString(16)) + h.slice(17, 20),
+        h.slice(20, 32),
+    ].join('-');
+}
 
-    // 2. Check today's usage
-    const today = new Date().toISOString().split('T')[0];
-    const { data: usage } = await supabase
-        .from('usage_counters')
-        .select('generations_used')
-        .eq('subject_id', merchantId)
-        .eq('subject_type', 'merchant')
-        .eq('date', today)
-        .single();
+// Resolves who this generation is billed to and what their daily cap is. It
+// does NOT decide whether the request is allowed — enforcement happens in
+// consume_generation(), which checks and increments under a row lock. Doing the
+// comparison here as a separate read would reintroduce the race where two
+// concurrent requests both read "4 used" and both proceed.
+//
+// A negative limit means unlimited (usage is still counted, never denied).
+//
+// Flat shape with optional fields rather than a discriminated union: this
+// project compiles with `strict: false`, so strictNullChecks is off and TS will
+// not narrow a union on a boolean `ok` discriminant.
+type Resolution = {
+    error?: string;
+    status?: number;
+    subject?: Subject;
+    limit: number;
+    overMessage?: (used: number, limit: number) => string;
+};
 
-    const used = usage?.generations_used || 0;
+async function resolveSubject(merchantId: string, userId: string | null): Promise<Resolution> {
+    // Exception for the landing page interactive demo
+    if (merchantId === 'demo_hero_interactive') return { limit: -1 };
 
-    if (used >= entitlement.daily_generation_limit) {
+    // Merchant-scoped call (Shopify extension / widget with a merchantId in context)
+    if (merchantId) {
+        const { data: entitlement } = await supabase
+            .from('entitlements')
+            .select('daily_generation_limit, unlimited')
+            .eq('subject_id', merchantId)
+            .eq('subject_type', 'merchant')
+            .order('created_at', { ascending: false })
+            .limit(1)
+            .maybeSingle();
+
+        if (!entitlement) {
+            return { error: 'No active plan found. Please subscribe at emode.app', status: 401, limit: 0 };
+        }
+
         return {
-            allowed: false,
-            error: `Daily limit reached (${used}/${entitlement.daily_generation_limit}). Resets at midnight UTC.`,
-            status: 429
+            subject: { type: 'merchant', id: merchantId },
+            limit: entitlement.unlimited ? -1 : entitlement.daily_generation_limit,
+            overMessage: (used, limit) =>
+                `Daily limit reached (${used}/${limit}). Resets at midnight UTC.`,
         };
     }
 
-    return { allowed: true };
+    // Consumer call (Chrome extension / logged-in shopper on the web app, no merchant context)
+    if (userId) {
+        const { data: entitlement } = await supabase
+            .from('entitlements')
+            .select('daily_generation_limit, unlimited')
+            .eq('subject_id', userId)
+            .eq('subject_type', 'user')
+            .order('created_at', { ascending: false })
+            .limit(1)
+            .maybeSingle();
+
+        // No entitlement row yet just means "free tier", not "no access"
+        return {
+            subject: { type: 'user', id: userId },
+            limit: entitlement?.unlimited ? -1 : (entitlement?.daily_generation_limit ?? FREE_TIER_DAILY_LIMIT),
+            overMessage: (used, limit) =>
+                `Daily limit reached (${used}/${limit}). Upgrade for unlimited generations, or wait until midnight UTC.`,
+        };
+    }
+
+    return { error: 'Sign in required, or missing merchant ID.', status: 401, limit: 0 };
 }
 
-async function incrementUsage(merchantId: string) {
-    if (!merchantId) return;
+// Atomically reserve one generation against a subject's daily cap.
+async function consume(subject: Subject, limit: number): Promise<{ allowed: boolean; used: number }> {
+    const { data, error } = await supabase.rpc('consume_generation', {
+        p_subject_type: subject.type,
+        p_subject_id: subject.id,
+        p_limit: limit,
+    });
 
-    const today = new Date().toISOString().split('T')[0];
-
-    // Try to update existing counter
-    const { data: existing } = await supabase
-        .from('usage_counters')
-        .select('id, generations_used')
-        .eq('subject_id', merchantId)
-        .eq('subject_type', 'merchant')
-        .eq('date', today)
-        .single();
-
-    if (existing) {
-        await supabase
-            .from('usage_counters')
-            .update({ generations_used: existing.generations_used + 1 })
-            .eq('id', existing.id);
-    } else {
-        await supabase
-            .from('usage_counters')
-            .insert({
-                subject_type: 'merchant',
-                subject_id: merchantId,
-                date: today,
-                generations_used: 1,
-            });
+    if (error) {
+        // Fail closed: if we cannot account for the request we do not spend a
+        // Gemini call on it.
+        console.error('[API/Generate] consume_generation failed:', error);
+        return { allowed: false, used: 0 };
     }
+
+    const row = Array.isArray(data) ? data[0] : data;
+    return { allowed: !!row?.allowed, used: row?.used ?? 0 };
+}
+
+// Give a reserved credit back when the generation itself fails.
+async function release(subject: Subject) {
+    const { error } = await supabase.rpc('release_generation', { p_subject_id: subject.id });
+    if (error) console.error('[API/Generate] release_generation failed:', error);
 }
 
 export async function POST(request: Request) {
+    // Credits reserved before generation, released again if it fails.
+    const reserved: Subject[] = [];
+
     try {
         const body = await request.json();
 
@@ -107,17 +179,64 @@ export async function POST(request: Request) {
             );
         }
 
-        // Entitlement check
+        // ── 1. Per-IP ceiling, applied to everyone ──
+        // Deliberately ahead of the entitlement lookup: it is the only limit a
+        // caller cannot influence, so it has to hold even for requests that
+        // forge a guestId or ride an unlimited merchant plan.
+        const ip = getClientIp(request);
+        if (ip) {
+            const ipSubject: Subject = { type: 'ip', id: ipToSubjectId(ip) };
+            const ipCheck = await consume(ipSubject, IP_DAILY_CEILING);
+            if (!ipCheck.allowed) {
+                console.warn(`[API/Generate] IP ceiling hit (${ipCheck.used}/${IP_DAILY_CEILING})`);
+                return NextResponse.json(
+                    { error: 'Too many try-ons from this network today. Please try again tomorrow.' },
+                    { status: 429, headers: corsHeaders }
+                );
+            }
+            reserved.push(ipSubject);
+        }
+
+        // ── 2. Who is this billed to? ──
+        // Merchant context takes priority; otherwise fall back to the calling
+        // user's own (free or paid) consumer entitlement. Anonymous shoppers may
+        // pass a client-generated guestId (UUID) so a no-signup try-on still
+        // gets a stable counter — it is forgeable, which is exactly why the IP
+        // ceiling above exists.
         const merchantId = body.merchantId || '';
-        const entitlementCheck = await checkEntitlement(merchantId);
-        if (!entitlementCheck.allowed) {
+        const authedUserId = merchantId ? null : await getUserIdFromRequest(request);
+        const guestId = !merchantId && !authedUserId && typeof body.guestId === 'string' && UUID_RE.test(body.guestId)
+            ? body.guestId
+            : null;
+
+        const resolution = await resolveSubject(merchantId, authedUserId || guestId);
+        if (resolution.error) {
+            // Nothing was generated, so hand back the IP credit taken above.
+            await Promise.all(reserved.map(release));
             return NextResponse.json(
-                { error: entitlementCheck.error },
-                { status: entitlementCheck.status || 429, headers: corsHeaders }
+                { error: resolution.error },
+                { status: resolution.status, headers: corsHeaders }
             );
         }
 
-        // Trigger AI Generation
+        // ── 3. Reserve against their plan ──
+        if (resolution.subject) {
+            const check = await consume(resolution.subject, resolution.limit);
+            if (!check.allowed) {
+                await Promise.all(reserved.map(release));
+                return NextResponse.json(
+                    {
+                        error: resolution.overMessage
+                            ? resolution.overMessage(check.used, resolution.limit)
+                            : 'Daily limit reached.',
+                    },
+                    { status: 429, headers: corsHeaders }
+                );
+            }
+            reserved.push(resolution.subject);
+        }
+
+        // ── 4. Generate ──
         const result = await aiEngine.generateTryOn({
             userImage: body.userImage,
             productImages: body.productImages,
@@ -125,14 +244,13 @@ export async function POST(request: Request) {
             bodyMetadata: body.bodyMetadata
         });
 
-        // Track usage
-        await incrementUsage(merchantId);
-
         return NextResponse.json(result, { headers: corsHeaders });
     } catch (error: any) {
         console.error('[API/Generate] Error:', error);
+        // A failed generation should not cost anyone a try-on.
+        await Promise.all(reserved.map(release));
         return NextResponse.json(
-            { error: 'Internal Server Error', details: error.message },
+            { error: error.message || 'Internal Server Error' },
             { status: 500, headers: corsHeaders }
         );
     }

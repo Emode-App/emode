@@ -37,6 +37,8 @@ export function ModalContent({ initialProduct, onClose }: ModalContentProps) {
     // Dressing Room State
     const [dressingRoomItems, setDressingRoomItems] = useState<DressingItem[]>([]);
     const [selectedIds, setSelectedIds] = useState<string[]>([]);
+    const [showUpgrade, setShowUpgrade] = useState(false);
+    const [upgrading, setUpgrading] = useState(false);
 
     // Current Product Context - use props if provided, otherwise searchParams
     const product = initialProduct || {
@@ -44,12 +46,45 @@ export function ModalContent({ initialProduct, onClose }: ModalContentProps) {
         image: searchParams.get('image') || 'https://images.unsplash.com/photo-1591047139829-d91aecb6caea?q=80&w=400&h=600&auto=format&fit=crop',
         price: searchParams.get('price') || '$299.00',
     };
-    const merchantId = searchParams.get('merchant') || '';
+    // Shopify's theme extension identifies the store by domain (?shop=), the widget
+    // by merchant UUID (?merchant=). Resolve shop → merchant so Shopify try-ons hit
+    // the merchant's paid entitlement instead of the shopper's personal free tier.
+    const shopDomain = searchParams.get('shop') || '';
+    const variantId = searchParams.get('variant') || '';
+    const originHost = searchParams.get('origin') || '';
+    const [merchantId, setMerchantId] = useState(searchParams.get('merchant') || '');
     const [user, setUser] = useState<any>(null);
 
     useEffect(() => {
         supabase.auth.getUser().then(({ data: { user } }) => setUser(user));
     }, []);
+
+    useEffect(() => {
+        if (merchantId || !shopDomain) return;
+        supabase
+            .from('merchants')
+            .select('id')
+            .eq('shop_domain', shopDomain)
+            .single()
+            .then(({ data }) => {
+                if (data?.id) setMerchantId(data.id);
+            });
+    }, [shopDomain, merchantId]);
+
+    // Anonymous shoppers get a persistent guest ID so the free tier (5/day) works
+    // without an account; the server treats it like a user-scoped usage counter.
+    const getGuestId = () => {
+        try {
+            let id = localStorage.getItem('emode_guest_id');
+            if (!id) {
+                id = crypto.randomUUID();
+                localStorage.setItem('emode_guest_id', id);
+            }
+            return id;
+        } catch {
+            return null;
+        }
+    };
 
     // Auto-add logic from Widget and Fetch persistence
     useEffect(() => {
@@ -138,11 +173,17 @@ export function ModalContent({ initialProduct, onClose }: ModalContentProps) {
         if (!image) return;
         setGenerating(true);
         setError(null);
+        setShowUpgrade(false);
 
         try {
+            const { data: { session } } = await supabase.auth.getSession();
+
             const response = await fetch('/api/generate', {
                 method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
+                headers: {
+                    'Content-Type': 'application/json',
+                    ...(session?.access_token ? { Authorization: `Bearer ${session.access_token}` } : {}),
+                },
                 body: JSON.stringify({
                     userImage: image,
                     productImages: selectedIds.length > 0
@@ -150,12 +191,17 @@ export function ModalContent({ initialProduct, onClose }: ModalContentProps) {
                         : [product.image],
                     title: product.title,
                     merchantId,
+                    guestId: session ? undefined : getGuestId(),
                 })
             });
 
-            if (!response.ok) throw new Error('Generation failed');
-
             const data = await response.json();
+
+            if (!response.ok) {
+                if (response.status === 429) setShowUpgrade(true);
+                throw new Error(data.error || 'Generation failed');
+            }
+
             setResult(data.resultUrl);
 
             // Persist Generation to Cloud Closet
@@ -171,15 +217,34 @@ export function ModalContent({ initialProduct, onClose }: ModalContentProps) {
             }
         } catch (err: any) {
             console.error(err);
-            setError('Nano Banana Pro encountered a fabric drape error. Please try again.');
+            setError(err.message || 'Nano Banana Pro encountered a fabric drape error. Please try again.');
         } finally {
             setGenerating(false);
         }
     };
 
-    const handleAddToDressingRoom = async () => {
-        const { data: { user } } = await supabase.auth.getUser();
+    const handleUpgrade = async () => {
+        if (!user) {
+            router.push('/login');
+            return;
+        }
+        setUpgrading(true);
+        try {
+            const response = await fetch('/api/stripe/checkout', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ planId: 'chrome_unlimited', userId: user.id, platform: 'consumer' })
+            });
+            const data = await response.json();
+            if (data.url) window.open(data.url, '_blank');
+        } catch (err) {
+            console.error('Upgrade checkout failed:', err);
+        } finally {
+            setUpgrading(false);
+        }
+    };
 
+    const handleAddToDressingRoom = async () => {
         // Optimistic UI update
         setDressingRoomItems(prev => {
             if (prev.some(item => item.image === product.image)) return prev;
@@ -187,72 +252,51 @@ export function ModalContent({ initialProduct, onClose }: ModalContentProps) {
         });
         setActiveTab('dressing-room');
 
-        // Persist to Supabase if logged in
-        if (user) {
-            try {
-                // 1. Ensure product exists
-                const { data: pData } = await supabase
-                    .from('products')
-                    .upsert({
-                        merchant_id: merchantId || null,
-                        platform_product_id: product.title.toLowerCase().replace(/\s+/g, '-'),
-                        title: product.title,
-                        primary_image_url: product.image,
-                        marketplace_visible: !!merchantId,
-                    }, { onConflict: 'platform_product_id' })
-                    .select('id')
-                    .single();
+        // Persist via the API route (service role) — direct client-side writes to
+        // products/variants are blocked by RLS for consumers. Guests keep a
+        // session-local dressing room only.
+        const { data: { session } } = await supabase.auth.getSession();
+        if (!session) return;
 
-                if (pData) {
-                    // 2. Ensure variant exists
-                    const { data: vData } = await supabase
-                        .from('variants')
-                        .upsert({
-                            product_id: pData.id,
-                            platform_variant_id: 'default',
-                            price: parseFloat(product.price.replace(/[^0-9.-]+/g, "")),
-                            image_url: product.image
-                        }, { onConflict: 'platform_variant_id' })
-                        .select('id')
-                        .single();
+        try {
+            await fetch('/api/dressing-room/add', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                    Authorization: `Bearer ${session.access_token}`,
+                },
+                body: JSON.stringify({
+                    title: product.title,
+                    image: product.image,
+                    price: product.price,
+                    url: originHost ? `https://${originHost}` : undefined,
+                    merchantId: merchantId || undefined,
+                }),
+            });
+        } catch (err) {
+            console.error('Error persisting to Cloud Closet:', err);
+        }
+    };
 
-                    if (vData) {
-                        // 3. Find or create dressing room
-                        let { data: drData } = await supabase
-                            .from('dressing_rooms')
-                            .select('id')
-                            .eq('user_id', user.id)
-                            .eq('status', 'active')
-                            .single();
-
-                        if (!drData) {
-                            const { data: newDr } = await supabase
-                                .from('dressing_rooms')
-                                .insert({
-                                    user_id: user.id,
-                                    merchant_id: merchantId || null,
-                                    status: 'active'
-                                })
-                                .select('id')
-                                .single();
-                            drData = newDr;
-                        }
-
-                        if (drData) {
-                            await supabase
-                                .from('dressing_room_items')
-                                .insert({
-                                    dressing_room_id: drData.id,
-                                    product_id: pData.id,
-                                    variant_id: vData.id,
-                                    selected: false
-                                });
-                        }
-                    }
-                }
-            } catch (err) {
-                console.error('Error persisting to Cloud Closet:', err);
-            }
+    const handleAddToCart = () => {
+        const inIframe = window.parent !== window;
+        if (inIframe) {
+            // The embedding host completes the purchase: the Shopify theme extension
+            // posts to /cart/add.js, the widget re-dispatches as an emode:cart-add
+            // CustomEvent for the host site. Target '*' — the parent is the
+            // retailer's origin, unknowable here, and the payload has no secrets.
+            window.parent.postMessage({
+                type: 'emode:add-to-cart',
+                variantId,
+                title: product.title,
+                image: product.image,
+                price: product.price,
+            }, '*');
+        } else if (originHost) {
+            // Popup context (Chrome extension side panel) — outbound purchase link.
+            window.open(`https://${originHost}`, '_blank');
+        } else {
+            console.warn('[emode] No cart target available in this context.');
         }
     };
 
@@ -358,11 +402,20 @@ export function ModalContent({ initialProduct, onClose }: ModalContentProps) {
                                     )}
 
                                     {error && !generating && !converting && (
-                                        <div className="absolute bottom-4 left-4 right-4 animate-in slide-in-from-bottom-2">
+                                        <div className="absolute bottom-4 left-4 right-4 animate-in slide-in-from-bottom-2 flex flex-col gap-2">
                                             <div className="bg-red-500 text-white px-4 py-3 rounded-xl text-xs font-bold flex items-center justify-between shadow-lg">
                                                 <span>{error}</span>
                                                 <button onClick={() => setError(null)}><X className="w-4 h-4" /></button>
                                             </div>
+                                            {showUpgrade && (
+                                                <button
+                                                    onClick={handleUpgrade}
+                                                    disabled={upgrading}
+                                                    className="bg-accent-gold text-black px-4 py-3 rounded-xl text-xs font-black tracking-widest uppercase shadow-lg hover:scale-[1.02] transition-all disabled:opacity-50"
+                                                >
+                                                    {upgrading ? 'Loading...' : 'Upgrade — $5/mo Unlimited'}
+                                                </button>
+                                            )}
                                         </div>
                                     )}
                                 </div>
@@ -398,7 +451,10 @@ export function ModalContent({ initialProduct, onClose }: ModalContentProps) {
                                 >
                                     <Plus className="w-4 h-4" /> Add to Dressing Room
                                 </button>
-                                <button className="bg-obsidian text-white py-5 flex items-center justify-center gap-3 font-bold tracking-widest uppercase text-sm rounded-md hover:bg-black transition-all">
+                                <button
+                                    onClick={handleAddToCart}
+                                    className="bg-obsidian text-white py-5 flex items-center justify-center gap-3 font-bold tracking-widest uppercase text-sm rounded-md hover:bg-black transition-all"
+                                >
                                     <ShoppingCart className="w-4 h-4" /> {result ? 'Purchase Look' : 'Add to Cart'}
                                 </button>
                             </div>

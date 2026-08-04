@@ -8,6 +8,10 @@ export const PLAN_CONFIG: Record<string, {
     dailyLimit: number;
     unlimited: boolean;
     marketplaceAccess: boolean;
+    // 'merchant' plans (default) upsert a merchants row keyed by shop domain.
+    // 'user' plans attach the entitlement directly to the buyer's Supabase user id
+    // instead — there is no merchant/shop involved (e.g. the Chrome extension).
+    subjectType: 'merchant' | 'user';
 }> = {
     starter: {
         name: 'Starter',
@@ -17,6 +21,7 @@ export const PLAN_CONFIG: Record<string, {
         dailyLimit: 50,
         unlimited: false,
         marketplaceAccess: false,
+        subjectType: 'merchant',
     },
     pro: {
         name: 'Pro',
@@ -26,6 +31,7 @@ export const PLAN_CONFIG: Record<string, {
         dailyLimit: 200,
         unlimited: false,
         marketplaceAccess: true,
+        subjectType: 'merchant',
     },
     growth: {
         name: 'Growth',
@@ -35,6 +41,7 @@ export const PLAN_CONFIG: Record<string, {
         dailyLimit: 0,
         unlimited: true,
         marketplaceAccess: true,
+        subjectType: 'merchant',
     },
     lifetime_starter: {
         name: 'Lifetime Starter',
@@ -43,6 +50,7 @@ export const PLAN_CONFIG: Record<string, {
         dailyLimit: 50,
         unlimited: false,
         marketplaceAccess: false,
+        subjectType: 'merchant',
     },
     lifetime_pro: {
         name: 'Lifetime Pro',
@@ -51,6 +59,7 @@ export const PLAN_CONFIG: Record<string, {
         dailyLimit: 200,
         unlimited: false,
         marketplaceAccess: true,
+        subjectType: 'merchant',
     },
     lifetime_founder: {
         name: 'Lifetime Founder',
@@ -59,5 +68,16 @@ export const PLAN_CONFIG: Record<string, {
         dailyLimit: 0,
         unlimited: true,
         marketplaceAccess: true,
+        subjectType: 'merchant',
+    },
+    chrome_unlimited: {
+        name: 'Unlimited (Chrome Extension)',
+        priceInCents: 500,
+        mode: 'subscription',
+        interval: 'month',
+        dailyLimit: 0,
+        unlimited: true,
+        marketplaceAccess: false,
+        subjectType: 'user',
     },
 };

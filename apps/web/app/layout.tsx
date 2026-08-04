@@ -1,6 +1,7 @@
 import type { Metadata } from "next";
 import { Inter, Outfit } from "next/font/google";
 import "@emode/ui/src/globals.css";
+import { ExtensionAuthBridge } from "../components/ExtensionAuthBridge";
 
 const inter = Inter({
     subsets: ["latin"],
@@ -24,7 +25,10 @@ export default function RootLayout({
 }>) {
     return (
         <html lang="en" className={`${inter.variable} ${outfit.variable} scroll-smooth`}>
-            <body className="antialiased">{children}</body>
+            <body className="antialiased">
+                <ExtensionAuthBridge />
+                {children}
+            </body>
         </html>
     );
 }

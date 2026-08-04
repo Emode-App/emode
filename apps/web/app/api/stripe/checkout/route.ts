@@ -9,11 +9,15 @@ import { PLAN_CONFIG } from '../../../../lib/stripe-plan-config';
 
 export async function POST(request: Request) {
     try {
-        const { planId, shopDomain, platform = 'widget' } = await request.json();
+        const { planId, shopDomain, platform = 'widget', userId } = await request.json();
 
         const planConfig = PLAN_CONFIG[planId];
         if (!planConfig) {
             return NextResponse.json({ error: 'Invalid plan' }, { status: 400 });
+        }
+
+        if (planConfig.subjectType === 'user' && !userId) {
+            return NextResponse.json({ error: 'Sign in required to subscribe.' }, { status: 401 });
         }
 
         const origin = request.headers.get('origin') || 'http://localhost:3001';
@@ -44,10 +48,20 @@ export async function POST(request: Request) {
                 planId,
                 shopDomain: shopDomain || '',
                 platform,
+                userId: userId || '',
                 marketplaceAccess: planConfig.marketplaceAccess ? 'true' : 'false',
             },
-            // Redirect to onboarding after successful checkout
-            success_url: `${origin}/admin/onboarding?checkout=success&plan=${planId}`,
+            // Also stamp metadata onto the Subscription itself (session metadata is
+            // NOT copied there automatically) — subscription.deleted/invoice webhooks
+            // only receive the Subscription/Invoice object, not the original session,
+            // so this is how we know which user/plan a cancellation belongs to.
+            ...(planConfig.mode === 'subscription'
+                ? { subscription_data: { metadata: { planId, userId: userId || '' } } }
+                : {}),
+            // Merchant plans land in onboarding; consumer plans have no merchant flow.
+            success_url: planConfig.subjectType === 'user'
+                ? `${origin}/?checkout=success&plan=${planId}`
+                : `${origin}/admin/onboarding?checkout=success&plan=${planId}`,
             cancel_url: `${origin}/?checkout=cancelled`,
         });
 

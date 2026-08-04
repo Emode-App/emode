@@ -26,6 +26,17 @@
             "js": [
                 "content.js"
             ]
+        },
+        {
+            "matches": [
+                "https://emode.app/*",
+                "https://*.emode.app/*",
+                "http://localhost:3000/*"
+            ],
+            "js": [
+                "auth-bridge.js"
+            ],
+            "run_at": "document_start"
         }
     ],
     "background": {

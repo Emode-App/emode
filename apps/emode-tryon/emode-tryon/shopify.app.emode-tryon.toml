@@ -1,0 +1,47 @@
+# Learn more about configuring your app at https://shopify.dev/docs/apps/tools/cli/configuration
+
+client_id = "a8bdc109e414119e97ece1a0ab1b0df1"
+name = "emode-tryon"
+application_url = "https://example.com"
+embedded = true
+
+[build]
+automatically_update_urls_on_dev = true
+include_config_on_deploy = true
+
+[webhooks]
+api_version = "2026-04"
+
+  [[webhooks.subscriptions]]
+  topics = [ "app/scopes_update" ]
+  uri = "/webhooks/app/scopes_update"
+
+  [[webhooks.subscriptions]]
+  topics = [ "app/uninstalled" ]
+  uri = "/webhooks/app/uninstalled"
+
+  # GDPR/privacy compliance webhooks are mandatory for App Store review, but
+  # they are NOT ordinary subscriptions — declaring them under
+  # [[webhooks.subscriptions]] fails with "The following topic is invalid".
+  # They belong in their own block, keyed by purpose rather than by topic name.
+  #
+  # `shopify app config link` and `--reset` wipe this along with access_scopes,
+  # so re-check both sections after running either.
+  [webhooks.privacy_compliance]
+  customer_data_request_url = "/webhooks/customers/data_request"
+  customer_deletion_url = "/webhooks/customers/redact"
+  shop_deletion_url = "/webhooks/shop/redact"
+
+[access_scopes]
+# Learn more at https://shopify.dev/docs/apps/tools/cli/configuration#access_scopes
+#
+# These are requested at install time. If this is empty when you install, the
+# app gets granted nothing and syncProducts() in app/routes/app._index.jsx fails
+# with a permissions error while everything else looks fine. `shopify app config
+# link` and `--reset` both blank this out — re-check it after either.
+scopes = "write_products,read_products"
+optional_scopes = [ ]
+use_legacy_install_flow = false
+
+[auth]
+redirect_urls = [ "https://example.com/api/auth" ]

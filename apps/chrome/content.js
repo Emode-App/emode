@@ -2,14 +2,48 @@
 
 console.log('emodeAI | Universal Widget Active.');
 
-const BASE_URL = 'http://localhost:3000';
+// ⚠️ SHIP-TIME TODO: flip this default to 'https://<your-production-domain>'
+// before submitting to the Chrome Web Store. It's localhost while the app has
+// no live deployment. The storage override below works in either direction:
+// chrome.storage.local.set({ emode_dev_base_url: '<url>' }) in the service
+// worker console.
+let BASE_URL = 'http://localhost:3001';
+try {
+    chrome.storage?.local?.get('emode_dev_base_url', (result) => {
+        if (result && result.emode_dev_base_url) BASE_URL = result.emode_dev_base_url;
+    });
+} catch (e) { /* storage unavailable, keep default */ }
 
 const ECOM_KEYWORDS = ['ADD TO', 'BAG', 'TOTE', 'BASKET', 'BUY', 'BUY NOW', 'CHECKOUT', 'PURCHASE'];
 
 function isEmodeApp() {
     return window.location.origin === BASE_URL ||
+        window.location.hostname === 'emode.app' ||
         window.location.hostname === 'emode.ai' ||
+        window.location.hostname === 'localhost' ||
         window.location.pathname.startsWith('/modal');
+}
+
+// Relay detected product context to the side panel (best-effort; side panel may not be open)
+function notifyProductDetected(context) {
+    if (!context) return;
+    try {
+        chrome.runtime.sendMessage({
+            type: 'PRODUCT_DETECTED',
+            product: { ...context, url: window.location.href }
+        });
+    } catch (e) { /* extension context invalidated (e.g. mid-reload) — ignore */ }
+}
+
+// Persist a locally-tracked cart item (no account required) and notify the side panel
+function addToLocalCart(context) {
+    if (!context) return;
+    try {
+        chrome.runtime.sendMessage({
+            type: 'CART_ADD',
+            item: { title: context.title, image: context.image, price: context.price, url: window.location.href }
+        });
+    } catch (e) { /* extension context invalidated — ignore */ }
 }
 
 function showToast(message) {
@@ -351,9 +385,11 @@ function isGenericTitle(title) {
     const isMostlyNumbers = (title.replace(/[^0-9]/g, '').length / title.length) > 0.5;
     const isTooShort = title.length < 3;
 
-    // Reject long descriptions (often AI-generated alt tags)
+    // Reject long descriptions (often AI-generated alt tags).
+    // Count only commas/semicolons — periods are common in legit brand names
+    // and acronyms ("A.L.O.C.S. T-Shirt"), which must NOT be rejected.
     const words = title.split(/\s+/).filter(w => w.length > 0);
-    const hasManyPunctuation = (title.match(/[,.;]/g) || []).length > 2;
+    const hasManyPunctuation = (title.match(/[,;]/g) || []).length > 2;
     const isTooLong = words.length > 15;
 
     return hasGeneric || isMostlyNumbers || isTooShort || isTooLong || hasManyPunctuation;
@@ -364,14 +400,10 @@ function extractFromContainer(container, img) {
 
     const imgRect = img.getBoundingClientRect();
 
-    // 1. Try to get title from Image Alt, but ONLY if it's not generic
-    let title = img.alt?.trim();
-    if (isGenericTitle(title)) {
-        console.log('Image Alt is generic, skipping:', title);
-        title = '';
-    } else {
-        console.log('Using High-Quality Image Alt:', title);
-    }
+    // Title is resolved below — visible on-card text FIRST, image alt only as
+    // fallback. The modal must show exactly what the shopper sees on the card;
+    // alt text often carries metadata the card doesn't display ("... BY BRAND").
+    let title = '';
 
     // 2. Find ALL Prices near the image and pick the CHEAPEST ACTIVE price
     const priceElements = Array.from(container.querySelectorAll('*'))
@@ -390,9 +422,15 @@ function extractFromContainer(container, img) {
             text: textMatch ? textMatch[0] : null,
             verticalDist,
             horizontalDist,
+            centerX: elRect.left + elRect.width / 2,
             fontSize: parseFloat(window.getComputedStyle(el).fontSize) || 0
         };
-    }).filter(p => p.value !== Infinity && p.value > 0.5 && p.verticalDist > -50 && p.verticalDist < 300);
+    }).filter(p =>
+        p.value !== Infinity && p.value > 0.5 &&
+        p.verticalDist > -50 && p.verticalDist < 300 &&
+        // Same-column constraint — don't inherit a neighboring card's price
+        p.centerX > imgRect.left - 40 && p.centerX < imgRect.right + 40
+    );
 
     // Sort by proximity first, then by value
     priceValues.sort((a, b) => {
@@ -435,8 +473,8 @@ function extractFromContainer(container, img) {
     price = price || '';
     console.log('Price Selection (Lowest Active, Proximity-Based):', price || 'No price found');
 
-    // 3. Spatial title search if Alt was generic or missing
-    if (!title) {
+    // 3. Visible on-card title — always the first choice
+    {
         const candidates = Array.from(container.querySelectorAll('span, div, p, b, strong, h1, h2, h3, h4, a, .name, .product-title, [class*="title"], [class*="name"]'))
             .filter(el => {
                 const text = el.innerText?.trim();
@@ -446,10 +484,13 @@ function extractFromContainer(container, img) {
 
                 const elRect = el.getBoundingClientRect();
                 const verticalDist = elRect.top - imgRect.bottom;
-                const horizontalDist = Math.abs(elRect.left - imgRect.left);
 
-                // Must be below the image and reasonably close
-                return verticalDist > -30 && verticalDist < 200 && horizontalDist < 300;
+                // Must be below the image AND in the same grid column — the
+                // candidate's horizontal center must fall within the hovered
+                // image's span, so a neighboring card's title can never win.
+                const elCenterX = elRect.left + elRect.width / 2;
+                const withinColumn = elCenterX > imgRect.left - 40 && elCenterX < imgRect.right + 40;
+                return verticalDist > -30 && verticalDist < 200 && withinColumn;
             })
             .map(el => {
                 const elRect = el.getBoundingClientRect();
@@ -476,8 +517,17 @@ function extractFromContainer(container, img) {
                 return a.distance - b.distance;
             });
 
-        title = candidates[0]?.text || 'Unknown Product';
-        console.log('Title Selection (Proximity-Based):', title);
+        title = candidates[0]?.text || '';
+        console.log('Title Selection (Visible on-card text):', title || '(none found)');
+    }
+
+    // Fallback: image alt — only when the card shows no scrapable title at all
+    if (!title) {
+        const alt = img.alt?.trim();
+        if (alt && !isGenericTitle(alt)) {
+            console.log('Falling back to Image Alt:', alt);
+            title = alt;
+        }
     }
 
     title = cleanTitle(title);
@@ -489,13 +539,6 @@ function extractFromContainer(container, img) {
 }
 
 
-
-function toTitleCase(str) {
-    if (!str) return '';
-    return str.toLowerCase().split(' ').map(word => {
-        return word.charAt(0).toUpperCase() + word.slice(1);
-    }).join(' ');
-}
 
 function cleanTitle(title) {
     if (!title) return 'Unknown Product';
@@ -533,8 +576,10 @@ function cleanTitle(title) {
         cleaned = cleaned.substring(0, 147) + '...';
     }
 
-    // 6. Final Touch: Uniform Title Case
-    return toTitleCase(cleaned.trim().replace(/\s+/g, ' '));
+    // 6. Preserve the site's own casing exactly — the modal must show the
+    // title as the shopper sees it, not a re-formatted version.
+    const result = cleaned.trim().replace(/\s+/g, ' ');
+    return result || 'Unknown Product';
 }
 
 function extractProductContext() {
@@ -764,6 +809,8 @@ function injectButtons() {
 
     if (!targetBtn) return;
 
+    notifyProductDetected(extractProductContext());
+
     const btnGroup = document.createElement('div');
     btnGroup.className = 'emode-extension-injected';
     Object.assign(btnGroup.style, {
@@ -840,14 +887,19 @@ function injectButtons() {
         e.preventDefault();
         e.stopPropagation();
         const context = extractProductContext(); // Get fresh context on click
-        if (context) openModal(context);
+        if (context) {
+            notifyProductDetected(context);
+            openModal(context);
+        }
     };
 
     dressBtn.onclick = (e) => {
         e.preventDefault();
         e.stopPropagation();
         const context = extractProductContext(); // Get fresh context on click
-        const addUrl = `${BASE_URL}/modal?action=add&title=${encodeURIComponent(context.title)}&image=${encodeURIComponent(context.image)}&price=${encodeURIComponent(context.price)}`;
+        notifyProductDetected(context);
+        addToLocalCart(context);
+        const addUrl = `${BASE_URL}/modal?action=add&title=${encodeURIComponent(context.title)}&image=${encodeURIComponent(context.image)}&price=${encodeURIComponent(context.price)}&origin=${encodeURIComponent(window.location.host)}`;
         const iframe = document.createElement('iframe');
         iframe.style.display = 'none';
         iframe.src = addUrl;
@@ -949,6 +1001,7 @@ document.addEventListener('mouseover', (e) => {
                 if (!currentTarget) return;
                 const container = findProductContainer(currentTarget);
                 const context = extractFromContainer(container, currentTarget);
+                notifyProductDetected(context);
                 openModal(context);
             };
 
@@ -958,7 +1011,9 @@ document.addEventListener('mouseover', (e) => {
                 if (!currentTarget) return;
                 const container = findProductContainer(currentTarget);
                 const context = extractFromContainer(container, currentTarget);
-                const addUrl = `${BASE_URL}/modal?action=add&title=${encodeURIComponent(context.title)}&image=${encodeURIComponent(context.image)}&price=${encodeURIComponent(context.price)}`;
+                notifyProductDetected(context);
+                addToLocalCart(context);
+                const addUrl = `${BASE_URL}/modal?action=add&title=${encodeURIComponent(context.title)}&image=${encodeURIComponent(context.image)}&price=${encodeURIComponent(context.price)}&origin=${encodeURIComponent(window.location.host)}`;
                 const iframe = document.createElement('iframe');
                 iframe.style.display = 'none';
                 iframe.src = addUrl;

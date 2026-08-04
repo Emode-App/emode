@@ -256,11 +256,16 @@
   <div class="glass-card usage-section" style="margin-top: 24px; margin-bottom: 32px;">
     <h3>Daily Generations</h3>
     <div class="usage-bar">
-      <div id="usage-progress" class="usage-progress" style="width: 40%;"></div>
+      <div id="usage-progress" class="usage-progress" style="width: 0%;"></div>
     </div>
     <div class="usage-text">
-      <span id="usage-count">2 / 5</span>
-      <span>Refreshes in 14h</span>
+      <span id="usage-count">Loading...</span>
+      <span>Resets at midnight UTC</span>
+    </div>
+    <div id="upgrade-section" style="display: none; margin-top: 12px;">
+      <button id="btn-upgrade" class="btn-try-on" style="margin-top: 0; background: linear-gradient(135deg, #c5a059 0%, #e0c080 100%);">
+        Upgrade — $5/mo Unlimited
+      </button>
     </div>
   </div>
 
@@ -293,6 +298,18 @@
       </svg>
       Start Virtual Try-On
     </button>
+  </div>
+
+  <div class="section-header" style="margin-top: 40px;">
+    <h2 class="section-title">Your Cart</h2>
+    <span id="cart-total" style="font-weight: 800; font-size: 0.9rem;">$0.00</span>
+  </div>
+
+  <div id="cart-list" style="display: flex; flex-direction: column; gap: 8px;">
+    <div class="empty-state" style="grid-column: span 2;">
+      No items saved yet.<br />
+      Add items while browsing to build your cart.
+    </div>
   </div>
 
   <div class="section-header" style="margin-top: 40px;">

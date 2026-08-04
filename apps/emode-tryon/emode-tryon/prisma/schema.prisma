@@ -5,12 +5,18 @@ generator client {
   provider = "prisma-client-js"
 }
 
-// Note that some adapters may set a maximum length for the String type by default, please ensure your strings are long
-// enough when changing adapters.
-// See https://www.prisma.io/docs/orm/reference/prisma-schema-reference#string for more information
+// Postgres (Supabase), not SQLite: session storage must survive on a serverless
+// host, where the filesystem is ephemeral. On SQLite every cold start comes up
+// with an empty Session table, logging merchants out at random and breaking the
+// embedded OAuth handshake.
+//
+// DATABASE_URL -> pooled connection (pgbouncer, port 6543), used at runtime.
+// DIRECT_URL   -> direct connection (port 5432), used for migrations, which
+//                 cannot run through the transaction pooler.
 datasource db {
-  provider = "sqlite"
-  url      = "file:dev.sqlite"
+  provider  = "postgresql"
+  url       = env("DATABASE_URL")
+  directUrl = env("DIRECT_URL")
 }
 
 model Session {
@@ -31,4 +37,7 @@ model Session {
   emailVerified       Boolean?  @default(false)
   refreshToken        String?
   refreshTokenExpires DateTime?
+
+  // Session storage looks sessions up by shop on every embedded request.
+  @@index([shop])
 }

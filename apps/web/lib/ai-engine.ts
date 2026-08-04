@@ -123,6 +123,7 @@ class AIEngine {
             // 2. Call Gemini — responseModalities required to get image output back
             let resultUrl = '';
             console.log("[Nano Banana Pro] Sending generation request to model...");
+            let modelError: any = null;
             try {
                 const result = await this.model.generateContent({
                     contents: [{ role: "user", parts: [{ text: prompt }, userImagePart, ...productParts] }],
@@ -148,17 +149,21 @@ class AIEngine {
                         response.candidates?.[0]?.content?.parts?.map((p: any) => Object.keys(p)).join(' | ') ?? 'none'
                     );
                 }
-            } catch (modelError: any) {
-                console.error("[Nano Banana Pro] Model generation threw an error:", modelError.message, modelError.stack);
+            } catch (err: any) {
+                modelError = err;
+                console.error("[Nano Banana Pro] Model generation threw an error:", err.message, err.stack);
             }
 
-            // Fallback only on true failure — log clearly so placeholder vs real image is obvious
+            // No silent placeholder: a failed generation must surface as an error so
+            // callers (and usage counters) never treat a stock photo as a real try-on.
             if (!resultUrl) {
-                console.warn("[Nano Banana Pro] Falling back to placeholder. Generation did not produce an image.");
-                resultUrl = 'https://images.unsplash.com/photo-1515886657613-9f3515b0c78f?q=80&w=400&h=600&auto=format&fit=crop';
-            } else {
-                console.log("[Nano Banana Pro] Generation succeeded. Returning real image (data URL length:", resultUrl.length, ")");
+                throw new Error(
+                    modelError?.message
+                        ? `Generation failed: ${modelError.message}`
+                        : 'Generation failed: model returned no image.'
+                );
             }
+            console.log("[Nano Banana Pro] Generation succeeded. Returning real image (data URL length:", resultUrl.length, ")");
 
             const processingTimeMs = Date.now() - startTime;
 
@@ -173,12 +178,7 @@ class AIEngine {
 
         } catch (error: any) {
             console.error("[Nano Banana Pro] Generation Failed:", error);
-            // We shouldn't reach here now unless image fetching fails, but if we do, return mock anyway so demo works
-            return {
-                resultUrl: 'https://images.unsplash.com/photo-1515886657613-9f3515b0c78f?q=80&w=400&h=600&auto=format&fit=crop',
-                processingTimeMs: 1500,
-                metadata: { categoryDetected: request.category || 'clothing items', confidence: 0.99 }
-            };
+            throw error;
         }
     }
 }

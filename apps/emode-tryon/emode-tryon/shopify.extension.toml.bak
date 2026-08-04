@@ -1,0 +1,7 @@
+api_version = "2024-07"
+name = "emodeAI Buttons"
+type = "theme_app_extension"
+uid = "76eadac7-4149-efc8-b030-3fb56a40d883ae9ca904"
+
+[build]
+liquid_only = true

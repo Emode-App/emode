@@ -6,6 +6,7 @@ import Link from 'next/link';
 import { Hero } from '../components/Hero';
 import { Sparkles, Zap, Shield, Globe, Check, X, ArrowRight, ShoppingCart, Plus } from 'lucide-react';
 import { useState } from 'react';
+import { supabase } from '@emode/database';
 
 export default function Home() {
     const [billingCycle, setBillingCycle] = useState<'monthly' | 'lifetime'>('monthly');
@@ -14,10 +15,14 @@ export default function Home() {
     const handleCheckout = async (planId: string) => {
         setCheckoutLoading(planId);
         try {
+            // Pass the signed-in user (if any) so the webhook can link the new
+            // merchant to their emode account deterministically, instead of hoping
+            // their Stripe checkout email matches their login email.
+            const { data: { user } } = await supabase.auth.getUser();
             const res = await fetch('/api/stripe/checkout', {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ planId }),
+                body: JSON.stringify({ planId, platform: 'widget', userId: user?.id }),
             });
             const data = await res.json();
             if (data.url) {
