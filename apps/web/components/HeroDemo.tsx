@@ -3,6 +3,8 @@
 import { useState, useRef } from 'react';
 import Image from 'next/image';
 import { Upload, Sparkles, X, Image as ImageIcon, Loader2 } from 'lucide-react';
+import { toDownscaledDataUrl } from '../lib/image';
+import { readJson } from '../lib/http';
 
 // Real Logical catalog rather than stock photos, so the demo shows the product
 // working on the same garments a merchant would actually sell. Self-hosted from
@@ -49,7 +51,7 @@ export const HeroDemo = () => {
 
   const fileInputRef = useRef<HTMLInputElement>(null);
 
-  const handleImageUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
+  const handleImageUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (!file) return;
 
@@ -61,13 +63,19 @@ export const HeroDemo = () => {
     // Fast, reliable local preview url for massive photos
     const objectUrl = URL.createObjectURL(file);
     setPreviewImage(objectUrl);
+    setError(null);
 
-    const reader = new FileReader();
-    reader.onload = (event) => {
-      setUserImage(event.target?.result as string);
-      setError(null);
-    };
-    reader.readAsDataURL(file);
+    try {
+      // Downscale before sending: a raw phone photo exceeds Vercel's 4.5 MB
+      // request body cap once base64-encoded, and the resulting 413 comes back
+      // as plain text rather than JSON.
+      setUserImage(await toDownscaledDataUrl(file));
+    } catch (err: any) {
+      setError(err.message || 'That image could not be processed.');
+      setUserImage(null);
+      setPreviewImage(null);
+      URL.revokeObjectURL(objectUrl);
+    }
   };
 
   const toggleGarment = (id: string) => {
@@ -105,11 +113,7 @@ export const HeroDemo = () => {
         }),
       });
 
-      const data = await res.json();
-
-      if (!res.ok) {
-        throw new Error(data.error || 'Failed to generate try-on');
-      }
+      const data = await readJson(res);
 
       setResultImage(data.resultUrl); // The API actually returns resultUrl!
     } catch (err: any) {

@@ -1,12 +1,37 @@
 'use client';
 
 import Link from 'next/link';
-import { ShoppingBag } from 'lucide-react';
-import { usePathname } from 'next/navigation';
+import { useEffect, useState } from 'react';
+import { ShoppingBag, LayoutDashboard } from 'lucide-react';
+import { usePathname, useRouter } from 'next/navigation';
+import { supabase } from '../lib/supabase/browser';
 
 export const Navbar = () => {
     const pathname = usePathname();
+    const router = useRouter();
     const isMarketplace = pathname === '/marketplace';
+
+    // The nav previously hardcoded "Join emode", so a signed-in user saw the
+    // same call to action as a stranger — and there was no way to tell from the
+    // UI whether sign-in had actually worked.
+    const [signedIn, setSignedIn] = useState<boolean | null>(null);
+
+    useEffect(() => {
+        supabase.auth.getUser().then(({ data }) => setSignedIn(Boolean(data.user)));
+
+        // Also covers the magic-link case: when Supabase redirects to a page
+        // other than /auth/callback, the browser client exchanges the code
+        // client-side and fires SIGNED_IN after this component has mounted.
+        const { data: sub } = supabase.auth.onAuthStateChange((_event, session) => {
+            setSignedIn(Boolean(session?.user));
+        });
+        return () => sub.subscription.unsubscribe();
+    }, []);
+
+    const handleSignOut = async () => {
+        await supabase.auth.signOut();
+        router.refresh();
+    };
 
     return (
         <nav className="fixed top-0 left-0 right-0 z-50 glass px-6 py-4 flex items-center justify-center border-b border-black/5 shadow-md">
@@ -37,9 +62,31 @@ export const Navbar = () => {
                             <span className="absolute top-0 right-0 w-2 h-2 bg-purple-500 rounded-full border-2 border-white"></span>
                         </button>
                     )}
-                    <Link href="/login" className="btn-primary py-2 px-6 rounded-full text-sm font-semibold tracking-wide">
-                        Join emode
-                    </Link>
+                    {/* null while the session is still resolving — rendering
+                        "Join emode" first would flash a signed-out state at a
+                        user who is actually logged in. */}
+                    {signedIn === null ? (
+                        <span className="py-2 px-6 text-sm opacity-0 select-none" aria-hidden>&nbsp;</span>
+                    ) : signedIn ? (
+                        <>
+                            <Link
+                                href="/admin"
+                                className="hidden sm:inline-flex items-center gap-2 text-sm font-semibold hover:text-accent-gold transition-colors"
+                            >
+                                <LayoutDashboard className="w-4 h-4" /> Dashboard
+                            </Link>
+                            <button
+                                onClick={handleSignOut}
+                                className="btn-primary py-2 px-6 rounded-full text-sm font-semibold tracking-wide"
+                            >
+                                Sign Out
+                            </button>
+                        </>
+                    ) : (
+                        <Link href="/login" className="btn-primary py-2 px-6 rounded-full text-sm font-semibold tracking-wide">
+                            Join emode
+                        </Link>
+                    )}
                 </div>
             </div>
         </nav>

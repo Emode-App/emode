@@ -4,6 +4,8 @@ import { useState, useEffect } from 'react';
 import { useSearchParams, useRouter } from 'next/navigation';
 import { Upload, ShoppingCart, RefreshCw, LayoutGrid, Plus, X } from 'lucide-react';
 import { supabase } from '../../lib/supabase/browser';
+import { toDownscaledDataUrl } from '../../lib/image';
+import { readJson } from '../../lib/http';
 
 interface DressingItem {
     id: string;
@@ -156,17 +158,18 @@ export function ModalContent({ initialProduct, onClose }: ModalContentProps) {
             }
         }
 
-        const reader = new FileReader();
-        reader.onload = (readerEvent) => {
-            setImage(readerEvent.target?.result as string);
+        // Downscale rather than reading the file as-is: a raw phone photo blows
+        // past Vercel's 4.5 MB request body cap once base64-encoded, and the 413
+        // comes back as plain text, so the client's res.json() failed with an
+        // opaque parse error instead of anything actionable.
+        try {
+            setImage(await toDownscaledDataUrl(processedFile));
             setResult(null); // Clear previous result if swapping
+        } catch (err: any) {
+            setError(err.message || 'Failed to read file.');
+        } finally {
             setConverting(false);
-        };
-        reader.onerror = () => {
-            setError('Failed to read file.');
-            setConverting(false);
-        };
-        reader.readAsDataURL(processedFile);
+        }
     };
 
     const handleGenerate = async () => {
@@ -195,12 +198,8 @@ export function ModalContent({ initialProduct, onClose }: ModalContentProps) {
                 })
             });
 
-            const data = await response.json();
-
-            if (!response.ok) {
-                if (response.status === 429) setShowUpgrade(true);
-                throw new Error(data.error || 'Generation failed');
-            }
+            if (response.status === 429) setShowUpgrade(true);
+            const data = await readJson(response);
 
             setResult(data.resultUrl);
 
