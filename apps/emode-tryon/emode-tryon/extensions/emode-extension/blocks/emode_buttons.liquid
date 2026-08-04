@@ -29,20 +29,40 @@
   settings; leaving max width at 0 keeps the previous full-width behaviour.
 {% endcomment %}
 <style>
+  /* Self-hosted rather than loaded from Google's CDN. A third-party font
+     request on a merchant's storefront costs a DNS lookup plus a round trip on
+     every product page, and fonts.googleapis.com has been ruled a GDPR problem
+     in some EU jurisdictions — not a liability to hand to merchants.
+     Syne is SIL Open Font Licensed, so embedding and redistributing it inside a
+     distributed app is permitted; most display faces are not.
+     font-display: swap so the buttons render immediately in the fallback and
+     never block interaction. */
+  @font-face {
+    font-family: 'Syne';
+    src: url('{{ "syne-bold.woff2" | asset_url }}') format('woff2');
+    font-weight: 700;
+    font-style: normal;
+    font-display: swap;
+  }
+
   .emode-btn {
     flex: 1;
     min-width: 0;
     padding: 13px 12px;
     border-radius: 10px;
     font-weight: 700;
-    font-size: 13px;
+    font-size: 12px;
     line-height: 1.2;
-    letter-spacing: 0.03em;
+    letter-spacing: 0.09em;
     white-space: nowrap;
     overflow: hidden;
     text-overflow: ellipsis;
     cursor: pointer;
-    font-family: inherit;
+    /* Fallback chain is chosen to still look deliberate if the webfont fails:
+       Futura/Avenir on Apple, Century Gothic on Windows — geometric relatives
+       of Syne rather than a generic sans. */
+    font-family: 'Syne', 'Futura', 'Avenir Next', 'Century Gothic', system-ui, sans-serif;
+    text-transform: uppercase;
     transition: transform 0.15s ease, box-shadow 0.15s ease, filter 0.15s ease;
   }
   .emode-btn:hover { transform: translateY(-1px); }
