@@ -1,5 +1,5 @@
-import { cookies } from 'next/headers';
 import { createClient } from '@supabase/supabase-js';
+import { createSupabaseServerClient } from '../../lib/supabase/server';
 import { redirect } from 'next/navigation';
 
 export const serviceClient = createClient(
@@ -8,17 +8,12 @@ export const serviceClient = createClient(
 );
 
 export async function getMerchantForUser() {
-    const supabase = createClient(
-        process.env.NEXT_PUBLIC_SUPABASE_URL!,
-        process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!,
-        {
-            global: {
-                headers: {
-                    cookie: (await cookies()).toString(),
-                },
-            },
-        }
-    );
+    // Previously this forwarded a raw `cookie` header into createClient() and
+    // called getUser(). That never worked: the browser client stored sessions in
+    // localStorage, so there were no auth cookies to forward, and getUser()
+    // reads its own stored session rather than the header. Every signed-in user
+    // resolved to null and the dashboard always showed the empty state.
+    const supabase = await createSupabaseServerClient();
 
     const { data: { user } } = await supabase.auth.getUser();
     if (!user) return null;

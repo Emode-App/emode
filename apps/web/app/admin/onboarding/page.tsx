@@ -3,7 +3,7 @@ import { SITE_URL } from '../../../lib/site';
 
 import { useState, useEffect } from 'react';
 import { useSearchParams } from 'next/navigation';
-import { supabase } from '@emode/database';
+import { supabase } from '../../../lib/supabase/browser';
 import { Check, Copy, Sparkles, ArrowRight, Store } from 'lucide-react';
 import Link from 'next/link';
 import { WidgetInstallCode } from '../components/WidgetInstallCode';

@@ -6,7 +6,7 @@ import Link from 'next/link';
 import { Hero } from '../components/Hero';
 import { Sparkles, Zap, Shield, Globe, Check, X, ArrowRight, ShoppingCart, Plus } from 'lucide-react';
 import { useState } from 'react';
-import { supabase } from '@emode/database';
+import { supabase } from '../lib/supabase/browser';
 
 export default function Home() {
     const [billingCycle, setBillingCycle] = useState<'monthly' | 'lifetime'>('monthly');

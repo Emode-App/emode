@@ -2,7 +2,7 @@
 
 import { useEffect, useState, useMemo } from 'react';
 import { AreaChart, Area, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer } from 'recharts';
-import { supabase } from '@emode/database';
+import { supabase } from '../../../lib/supabase/browser';
 import { BarChart3, TrendingUp, Calendar, Zap, Activity } from 'lucide-react';
 
 export type UsageData = {

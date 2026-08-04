@@ -3,7 +3,7 @@
 import { useState, useEffect } from 'react';
 import { useSearchParams, useRouter } from 'next/navigation';
 import { Upload, ShoppingCart, RefreshCw, LayoutGrid, Plus, X } from 'lucide-react';
-import { supabase } from '@emode/database';
+import { supabase } from '../../lib/supabase/browser';
 
 interface DressingItem {
     id: string;

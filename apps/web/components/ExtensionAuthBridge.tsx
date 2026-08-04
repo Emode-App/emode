@@ -1,7 +1,7 @@
 'use client';
 
 import { useEffect } from 'react';
-import { supabase } from '@emode/database';
+import { supabase } from '../lib/supabase/browser';
 
 /**
  * Broadcasts the current Supabase session to the emodeAI Chrome extension via

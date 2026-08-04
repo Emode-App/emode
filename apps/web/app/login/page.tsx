@@ -1,7 +1,7 @@
 'use client';
 
-import { useState } from 'react';
-import { supabase } from '@emode/database';
+import { useState, useEffect } from 'react';
+import { supabase } from '../../lib/supabase/browser';
 import { Mail, ArrowRight, Sparkles } from 'lucide-react';
 import Link from 'next/link';
 
@@ -9,6 +9,18 @@ export default function LoginPage() {
     const [email, setEmail] = useState('');
     const [loading, setLoading] = useState(false);
     const [message, setMessage] = useState<{ type: 'success' | 'error', text: string } | null>(null);
+
+    // /auth/callback redirects back here with ?error=... when a magic link is
+    // expired, already used, or arrives without a code. Read it off the URL
+    // directly rather than via useSearchParams, which would force this
+    // otherwise-static page into a Suspense boundary.
+    useEffect(() => {
+        const err = new URLSearchParams(window.location.search).get('error');
+        if (err) {
+            setMessage({ type: 'error', text: err });
+            window.history.replaceState({}, '', window.location.pathname);
+        }
+    }, []);
 
     const handleLogin = async (e: React.FormEvent) => {
         e.preventDefault();
