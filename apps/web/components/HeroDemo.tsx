@@ -1,27 +1,42 @@
 "use client";
 
 import { useState, useRef } from 'react';
+import Image from 'next/image';
 import { Upload, Sparkles, X, Image as ImageIcon, Loader2 } from 'lucide-react';
 
+// Real Logical catalog rather than stock photos, so the demo shows the product
+// working on the same garments a merchant would actually sell. Self-hosted from
+// public/ instead of a Shopify CDN URL — the landing page must not break if a
+// dev store is deleted.
+//
+// `path` is served two ways: next/image optimizes it for the thumbnail, while
+// generation needs the original absolute URL (the API fetches it server-side,
+// where a relative path would not resolve).
 const PREDEFINED_GARMENTS = [
   {
-    id: 'top-1',
-    category: 'tops',
-    name: 'White Essential Tee',
-    url: 'https://images.unsplash.com/photo-1521572163474-6864f9cf17ab?w=400&q=80',
-  },
-  {
-    id: 'bottom-1',
-    category: 'bottoms',
-    name: 'Classic Denim',
-    url: 'https://images.unsplash.com/photo-1541099649105-f69ad21f3246?w=400&q=80',
-  },
-  {
-    id: 'outer-1',
+    id: 'suede-bomber',
     category: 'outerwear',
-    name: 'Leather Jacket',
-    url: 'https://images.unsplash.com/photo-1520975954732-57dd22299614?w=400&q=80',
-  }
+    name: 'Suede Bomber — Harvest',
+    path: '/demo/suede-bomber.png',
+  },
+  {
+    id: 'denim-jacket',
+    category: 'outerwear',
+    name: 'Denim Workwear — Washed Indigo',
+    path: '/demo/denim-jacket.png',
+  },
+  {
+    id: 'sherpa-bomber',
+    category: 'outerwear',
+    name: 'Sherpa Bomber — Midnight',
+    path: '/demo/sherpa-bomber.png',
+  },
+  {
+    id: 'hybrid-pants',
+    category: 'bottoms',
+    name: 'Hybrid Denim-Leather — Contrast',
+    path: '/demo/hybrid-pants.png',
+  },
 ];
 
 export const HeroDemo = () => {
@@ -67,8 +82,14 @@ export const HeroDemo = () => {
     setIsGenerating(true);
     setError(null);
 
+    // Absolute URLs: /api/generate fetches these server-side, so a root-relative
+    // path would not resolve.
+    const origin = window.location.origin;
     const productImages = selectedGarmentIds
-      .map(id => PREDEFINED_GARMENTS.find(g => g.id === id)?.url)
+      .map(id => {
+        const g = PREDEFINED_GARMENTS.find(g => g.id === id);
+        return g ? `${origin}${g.path}` : null;
+      })
       .filter(Boolean);
 
     try {
@@ -157,7 +178,9 @@ export const HeroDemo = () => {
                 </div>
                 <h4 className="text-2xl font-heading font-bold mb-4">Your New Look</h4>
                 <p className="text-sm text-charcoal/60 leading-relaxed mb-8">
-                  This item has been seamlessly draped over your silhouette with our AI fabric engine.
+                  {selectedGarmentIds.length > 1
+                    ? `${selectedGarmentIds.length} pieces layered into a single outfit and draped over your silhouette by our AI fabric engine.`
+                    : 'This item has been seamlessly draped over your silhouette with our AI fabric engine.'}
                 </p>
               </div>
               <button
@@ -231,20 +254,30 @@ export const HeroDemo = () => {
                   <span className="text-xs font-bold uppercase tracking-widest text-charcoal/40">Step 2</span>
                   <span className="text-xs font-medium text-charcoal/80">Pick an Outfit</span>
                 </div>
-                <div className="grid grid-cols-3 gap-2 mb-2">
+                <div className="grid grid-cols-2 gap-2 mb-2">
                   {PREDEFINED_GARMENTS.map((garment) => {
                     const isSelected = selectedGarmentIds.includes(garment.id);
+                    const position = selectedGarmentIds.indexOf(garment.id) + 1;
                     return (
                       <button
                         key={garment.id}
                         onClick={() => toggleGarment(garment.id)}
-                        className={`relative aspect-square w-full rounded-2xl overflow-hidden transition-all ${isSelected ? 'ring-2 ring-accent-gold ring-offset-2 scale-95' : 'hover:opacity-80'}`}
+                        aria-pressed={isSelected}
+                        title={garment.name}
+                        className={`relative aspect-square w-full rounded-2xl overflow-hidden bg-white/70 transition-all ${isSelected ? 'ring-2 ring-accent-gold ring-offset-2 scale-95' : 'hover:opacity-80'}`}
                       >
-                        <img src={garment.url} alt={garment.name} className="object-cover w-full h-full" />
+                        <Image
+                          src={garment.path}
+                          alt={garment.name}
+                          fill
+                          sizes="(max-width: 768px) 45vw, 160px"
+                          className="object-contain p-2"
+                        />
                         {isSelected && (
                           <div className="absolute inset-0 bg-black/20 flex items-center justify-center">
-                            <div className="w-6 h-6 bg-accent-gold rounded-full flex items-center justify-center text-white shadow-lg">
-                              <Sparkles className="w-3 h-3" />
+                            {/* Numbered so stacking order is legible when layering a full outfit */}
+                            <div className="w-6 h-6 bg-accent-gold rounded-full flex items-center justify-center text-white text-[11px] font-bold shadow-lg">
+                              {position}
                             </div>
                           </div>
                         )}
@@ -252,7 +285,11 @@ export const HeroDemo = () => {
                     );
                   })}
                 </div>
-                <p className="text-[10px] text-charcoal/40 italic text-right">* Select multiple items!</p>
+                <p className="text-[10px] text-charcoal/40 italic text-right">
+                  {selectedGarmentIds.length > 1
+                    ? `Layering ${selectedGarmentIds.length} pieces into one outfit`
+                    : '* Tap more than one to build a full outfit'}
+                </p>
               </div>
 
               {/* Generate Button */}
