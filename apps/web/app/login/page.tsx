@@ -34,7 +34,11 @@ export default function LoginPage() {
             const { error } = await supabase.auth.signInWithOAuth({
                 provider,
                 options: {
-                    redirectTo: `${window.location.origin}/auth/callback?next=/admin`,
+                    // No query string: Supabase matches redirect URLs against the
+                    // allowlist literally, and `?next=` made it fall through to the
+                    // Site URL (the landing page). /auth/callback already sends
+                    // users to /admin by default.
+                    redirectTo: `${window.location.origin}/auth/callback`,
                 },
             });
             if (error) throw error;
@@ -59,7 +63,7 @@ export default function LoginPage() {
             const { error } = await supabase.auth.signInWithOtp({
                 email,
                 options: {
-                    emailRedirectTo: `${window.location.origin}/auth/callback?next=/admin`,
+                    emailRedirectTo: `${window.location.origin}/auth/callback`,
                 },
             });
 

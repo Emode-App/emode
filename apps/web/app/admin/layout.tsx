@@ -1,6 +1,6 @@
 import Link from 'next/link';
-import { cookies, headers } from 'next/headers';
-import { createClient } from '@supabase/supabase-js';
+import { headers } from 'next/headers';
+import { createSupabaseServerClient } from '../../lib/supabase/server';
 import { redirect } from 'next/navigation';
 import { LayoutDashboard, Package, Users, BarChart3, Settings, LogOut, Code2 } from 'lucide-react';
 
@@ -11,27 +11,22 @@ export default async function AdminLayout({
 }: {
     children: React.ReactNode;
 }) {
-    // Auth guard: check if user is logged in
-    const supabase = createClient(
-        process.env.NEXT_PUBLIC_SUPABASE_URL!,
-        process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!,
-        {
-            global: {
-                headers: {
-                    cookie: (await cookies()).toString(),
-                },
-            },
-        }
-    );
-
+    // Auth guard. This previously forwarded a raw `cookie` header into
+    // createClient() and called getUser() — which never resolves a user, so the
+    // guard redirected every visitor to /login including signed-in ones. Same
+    // bug as admin-util.ts had; the session lives in cookies read by the SSR
+    // client.
+    const supabase = await createSupabaseServerClient();
     const { data: { user } } = await supabase.auth.getUser();
 
-    // Allow onboarding page without auth (they just paid, may not be logged in yet)
-    // For all other admin pages, require authentication
+    // Allow onboarding without auth (they just paid and may not be signed in).
+    // The pathname comes from middleware: Next's old `x-invoke-path` header no
+    // longer exists, so the previous check always read '' and the exemption
+    // silently never applied.
     const headersList = await headers();
-    const currentPath = headersList.get('x-invoke-path') || '';
-    
-    if (!user && !currentPath.includes('/admin/onboarding')) {
+    const currentPath = headersList.get('x-pathname') || '';
+
+    if (!user && !currentPath.startsWith('/admin/onboarding')) {
         redirect('/login');
     }
 
