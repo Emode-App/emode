@@ -11,7 +11,27 @@
 
   Labels are short and nowrap so the pair always renders as one even row.
 {% endcomment %}
-<div class="emode-buttons" style="margin: 12px 0; display: flex; gap: 8px; font-family: inherit;">
+{%- liquid
+  assign max_w = block.settings.max_width | default: 0
+  assign align = block.settings.alignment | default: 'left'
+  assign wrap_style = 'margin: 12px 0;'
+  if max_w > 0
+    assign wrap_style = wrap_style | append: ' max-width: ' | append: max_w | append: 'px;'
+  endif
+  if align == 'center'
+    assign wrap_style = wrap_style | append: ' margin-left: auto; margin-right: auto;'
+  elsif align == 'right'
+    assign wrap_style = wrap_style | append: ' margin-left: auto;'
+  endif
+-%}
+{% comment %}
+  As a section-target block, Shopify places this at the section level — which on
+  many themes is OUTSIDE the padded container holding Add to cart / Buy it now.
+  The result is a row that runs wider than the rest of the column. Theme
+  structure varies too much to detect, so width and alignment are merchant
+  settings; leaving max width at 0 keeps the previous full-width behaviour.
+{% endcomment %}
+<div class="emode-buttons" style="{{ wrap_style }} display: flex; gap: 8px; font-family: inherit;">
   <button
     type="button"
     id="emode-try-on"
@@ -250,6 +270,28 @@
     "templates": ["product"]
   },
   "settings": [
+    {
+      "type": "range",
+      "id": "max_width",
+      "label": "Max width",
+      "min": 0,
+      "max": 800,
+      "step": 20,
+      "unit": "px",
+      "default": 0,
+      "info": "Match your Add to cart button's width. 0 = full width of the container."
+    },
+    {
+      "type": "select",
+      "id": "alignment",
+      "label": "Alignment",
+      "options": [
+        { "value": "left", "label": "Left" },
+        { "value": "center", "label": "Center" },
+        { "value": "right", "label": "Right" }
+      ],
+      "default": "left"
+    },
     {
       "type": "text",
       "id": "emode_host",
