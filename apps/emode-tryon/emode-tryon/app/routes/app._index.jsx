@@ -236,10 +236,14 @@ export const loader = async ({ request }) => {
     // 4. Sync the Shopify billing plan into the emode entitlement — this is what
     // /api/generate actually enforces, so an upgrade via Shopify billing must
     // land here or the merchant keeps starter limits despite paying for Pro.
-    const planKey = activePlan.toLowerCase();
+    // Comped merchants (design partners, free accounts) are exempt from billing
+    // sync. Without this their manually-granted plan is silently reset to
+    // starter the first time they open the app, because Shopify reports no
+    // active subscription.
+    const planKey = merchant.comped ? merchant.plan : activePlan.toLowerCase();
     const limits = PLAN_LIMITS[planKey] || PLAN_LIMITS.starter;
 
-    if (merchant.plan !== planKey) {
+    if (!merchant.comped && merchant.plan !== planKey) {
       await supabase.from("merchants").update({ plan: planKey }).eq("id", merchant.id);
       merchant.plan = planKey;
     }
@@ -253,7 +257,7 @@ export const loader = async ({ request }) => {
       .limit(1)
       .maybeSingle();
 
-    if (!latestEntitlement || latestEntitlement.plan !== planKey) {
+    if (!merchant.comped && (!latestEntitlement || latestEntitlement.plan !== planKey)) {
       await supabase.from("entitlements").insert([
         {
           subject_type: "merchant",
