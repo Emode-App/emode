@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { useSearchParams, useRouter } from 'next/navigation';
 import { Upload, ShoppingCart, RefreshCw, LayoutGrid, Plus, X } from 'lucide-react';
 import { supabase } from '../../lib/supabase/browser';
@@ -12,6 +12,38 @@ interface DressingItem {
     title: string;
     image: string;
     price: string;
+}
+
+/* ------------------------------------------------------------------ *
+ * Guest dressing room
+ *
+ * The modal is an iframe the widget tears down when the shopper closes it, so
+ * component state dies at exactly the moment a dressing room is supposed to be
+ * filling up: the shopper adds a jacket, goes back to browse, and opens the
+ * modal again on the jeans. Signed-in shoppers are held on the server; guests
+ * had nothing, so the second item always arrived in an empty room.
+ *
+ * Keyed by merchant, and the browser already partitions a third-party iframe's
+ * storage by embedding site, so one shopper's rooms at two different stores
+ * cannot bleed into each other.
+ * ------------------------------------------------------------------ */
+const guestRoomKey = (merchantId: string) => `emode_dressing_room_${merchantId || 'default'}`;
+
+function readGuestRoom(merchantId: string): DressingItem[] {
+    try {
+        const parsed = JSON.parse(localStorage.getItem(guestRoomKey(merchantId)) || '[]');
+        return Array.isArray(parsed) ? parsed : [];
+    } catch {
+        return []; // Private browsing, or something else wrote to the key.
+    }
+}
+
+function writeGuestRoom(merchantId: string, items: DressingItem[]) {
+    try {
+        localStorage.setItem(guestRoomKey(merchantId), JSON.stringify(items));
+    } catch {
+        // Storage full or blocked. The room still works for this session.
+    }
 }
 
 export interface ModalContentProps {
@@ -55,6 +87,17 @@ export function ModalContent({ initialProduct, onClose }: ModalContentProps) {
     // ?image=, so it can already point the try-on at anything it likes.
     const [handoffImage, setHandoffImage] = useState<string | null>(null);
 
+    // Whether the garment image is settled. A URL emode's servers can already
+    // reach needs no handoff and is ready immediately; anything else has to wait,
+    // because using it before the bytes arrive stores a URL that will not render
+    // and cannot be generated from. Capped by a timeout so a widget too old to
+    // answer, or an image that cannot be read back off its canvas, degrades to
+    // the URL instead of hanging the modal.
+    const rawImageParam = searchParams.get('image') || '';
+    const needsHandoff = /^https?:\/\/(localhost|127\.|\[?::1\]?|10\.|192\.168\.|172\.(1[6-9]|2\d|3[01])\.)|^https?:\/\/[^/]*\.(local|test|localhost)(:|\/|$)/i
+        .test(rawImageParam);
+    const [handoffSettled, setHandoffSettled] = useState(!needsHandoff);
+
     useEffect(() => {
         if (window.parent === window) return; // Not embedded — nothing to receive.
 
@@ -65,6 +108,7 @@ export function ModalContent({ initialProduct, onClose }: ModalContentProps) {
             if (typeof url === 'string' && url.startsWith('data:image/')) {
                 setHandoffImage(url);
             }
+            setHandoffSettled(true);
         };
         window.addEventListener('message', onMessage);
 
@@ -72,7 +116,11 @@ export function ModalContent({ initialProduct, onClose }: ModalContentProps) {
         // Waiting on the iframe's load event instead would race the listener above.
         window.parent.postMessage({ type: 'emode:ready' }, '*');
 
-        return () => window.removeEventListener('message', onMessage);
+        const timer = setTimeout(() => setHandoffSettled(true), 4000);
+        return () => {
+            window.removeEventListener('message', onMessage);
+            clearTimeout(timer);
+        };
     }, []);
 
     // Current Product Context - use props if provided, otherwise searchParams
@@ -127,40 +175,69 @@ export function ModalContent({ initialProduct, onClose }: ModalContentProps) {
         }
     };
 
-    // Auto-add logic from Widget and Fetch persistence
+    // Load the existing room, then add. Never both at once.
+    //
+    // These used to run together in one effect, which raced: the optimistic add
+    // appended to empty state, and the fetch that resolved a moment later
+    // replaced the whole array with the server's pre-add copy. Even for a
+    // signed-in shopper the item they just added could vanish.
+    const [hydrated, setHydrated] = useState(false);
+    const [isGuest, setIsGuest] = useState(true);
+    const autoAdded = useRef(false);
+
     useEffect(() => {
-        const action = searchParams.get('action');
-        if (action === 'add') {
-            handleAddToDressingRoom();
-        }
+        let cancelled = false;
 
-        // Fetch persisted items
-        const fetchDressingRoom = async () => {
+        (async () => {
             const { data: { user } } = await supabase.auth.getUser();
-            if (!user) return;
+            let items: DressingItem[] = [];
 
-            const { data, error } = await supabase
-                .from('dressing_room_items')
-                .select(`
-                    id,
-                    product:products(title, primary_image_url),
-                    variant:variants(price)
-                `)
-                .order('created_at', { ascending: false });
+            if (user) {
+                const { data, error } = await supabase
+                    .from('dressing_room_items')
+                    .select(`
+                        id,
+                        product:products(title, primary_image_url),
+                        variant:variants(price)
+                    `)
+                    .order('created_at', { ascending: false });
 
-            if (data && !error) {
-                const formattedItems = data.map((item: any) => ({
-                    id: item.id,
-                    title: item.product.title,
-                    image: item.product.primary_image_url,
-                    price: item.variant.price.toString()
-                }));
-                setDressingRoomItems(formattedItems);
+                if (data && !error) {
+                    items = data.map((item: any) => ({
+                        id: item.id,
+                        title: item.product.title,
+                        image: item.product.primary_image_url,
+                        price: item.variant.price.toString(),
+                    }));
+                }
+            } else {
+                items = readGuestRoom(merchantId);
             }
-        };
 
-        fetchDressingRoom();
-    }, [searchParams]); // Re-run if URL changes
+            if (cancelled) return;
+            setIsGuest(!user);
+            setDressingRoomItems(items);
+            setHydrated(true);
+        })();
+
+        return () => { cancelled = true; };
+    }, [merchantId]);
+
+    // Only once the room is loaded and the garment image is settled, so the item
+    // is stored with an image that actually renders.
+    useEffect(() => {
+        if (searchParams.get('action') !== 'add') return;
+        if (!hydrated || !handoffSettled || autoAdded.current) return;
+        autoAdded.current = true;
+        handleAddToDressingRoom();
+    }, [hydrated, handoffSettled, searchParams]);
+
+    // Guests have no server-side room, so this is the only thing that survives
+    // the widget destroying the iframe on close.
+    useEffect(() => {
+        if (!hydrated || !isGuest) return;
+        writeGuestRoom(merchantId, dressingRoomItems);
+    }, [dressingRoomItems, hydrated, isGuest, merchantId]);
 
     const handleFileUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
         const file = e.target.files?.[0];
@@ -280,7 +357,10 @@ export function ModalContent({ initialProduct, onClose }: ModalContentProps) {
     const handleAddToDressingRoom = async () => {
         // Optimistic UI update
         setDressingRoomItems(prev => {
-            if (prev.some(item => item.image === product.image)) return prev;
+            // Match on title, not image: the same garment arrives with a different
+            // image string depending on whether it came through as a URL or as a
+            // handed-over data URL, and re-adding it would duplicate the card.
+            if (prev.some(item => item.title === product.title || item.image === product.image)) return prev;
             return [...prev, { ...product, id: crypto.randomUUID() }];
         });
         setActiveTab('dressing-room');

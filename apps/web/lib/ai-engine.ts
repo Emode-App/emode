@@ -121,19 +121,39 @@ class AIEngine {
 
             const category = request.category || 'clothing items';
 
+            // On closures: left to itself the model styles the shot — it hangs a
+            // jacket open over an invented tee, because that is what product
+            // photography looks like. That is wrong twice over. It shows the
+            // garment in a state the shopper did not choose, and to fill the
+            // opening it has to invent an underlayer, so the shopper is judging a
+            // purchase partly on a shirt that does not exist. When outerwear is
+            // the only item being tried on, the layers already in the photo are
+            // the answer and inventing anything is the failure mode.
             const prompt = `
                 You are an expert fashion stylist and AI image generator.
                 Task: Virtual Try-On (VTON) for multiple items.
-                
+
                 Input 1: User's photo.
                 Inputs 2-${productParts.length + 1}: Product images of ${category}.
-                
-                Generate a photorealistic image of the user from Input 1 wearing ALL the items from the product inputs.
-                - Maintain the user's pose, lighting, and body shape exactly.
-                - Seamlessly integrate all provided products onto the user's body as a complete outfit.
-                - Ensure realistic layered fabric drape, folds, and lighting integration.
-                - High fidelity, 4k quality.
-                
+
+                Generate a photorealistic image of the person from Input 1 wearing ALL the items from the product inputs.
+
+                Fidelity to the person:
+                - Keep their pose, body shape, face, hair, skin tone and the background exactly as in Input 1.
+                - Match the lighting of Input 1 so the garments look photographed in that same room.
+
+                Fidelity to the garment — this is what the shopper is judging:
+                - Reproduce each product exactly as pictured: colour, material, pattern, hardware, proportions and length.
+                - Reproduce its closure exactly as pictured. If the product image shows it zipped, buttoned, or fastened, it stays that way on the person. Never unzip, unbutton, or open a garment to make the shot look styled.
+                - Do not add any garment, layer or accessory that was not provided as a product input.
+
+                Layers that were not part of this try-on:
+                - Replace only the garments the products actually occupy.
+                - Whatever else the person is already wearing in Input 1 stays as it is, unchanged and in place.
+                - If the products are outerwear only, the person keeps the top they are already wearing underneath. Do not invent a shirt, and do not open the outerwear in order to show one.
+
+                Render with realistic fabric drape, folds, seams and shadow. High fidelity, 4k quality.
+
                 Return ONLY the image.
             `;
 
