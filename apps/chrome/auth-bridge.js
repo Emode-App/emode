@@ -16,6 +16,7 @@ window.addEventListener('message', (event) => {
             accessToken: event.data.accessToken || null,
             userId: event.data.userId || null,
             expiresAt: event.data.expiresAt || null,
+            email: event.data.email || null,
         });
     }
 });

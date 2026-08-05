@@ -20,10 +20,11 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
             chrome.storage.local.set({
                 emode_access_token: message.accessToken,
                 emode_user_id: message.userId || null,
+                emode_user_email: message.email || null,
                 emode_token_expires_at: message.expiresAt || null,
             });
         } else {
-            chrome.storage.local.remove(['emode_access_token', 'emode_user_id', 'emode_token_expires_at']);
+            chrome.storage.local.remove(['emode_access_token', 'emode_user_id', 'emode_user_email', 'emode_token_expires_at']);
         }
     }
 

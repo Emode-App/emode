@@ -75,8 +75,57 @@ function showNoProduct() {
 }
 
 async function getAuthToken() {
-    const { emode_access_token, emode_user_id } = await chrome.storage.local.get(['emode_access_token', 'emode_user_id']);
-    return { token: emode_access_token || null, userId: emode_user_id || null };
+    const { emode_access_token, emode_user_id, emode_user_email } =
+        await chrome.storage.local.get(['emode_access_token', 'emode_user_id', 'emode_user_email']);
+    return {
+        token: emode_access_token || null,
+        userId: emode_user_id || null,
+        email: emode_user_email || null,
+    };
+}
+
+/**
+ * Initials from an email address.
+ *
+ * The tag is dropped first: brandonmtalla+logical@gmail.com is one person, and
+ * reading the tag as a surname would render "BL" for somebody called Brandon.
+ * Dots, underscores and hyphens do separate names, so those become two letters.
+ */
+function initialsFromEmail(email) {
+    const local = String(email || '').split('@')[0].split('+')[0];
+    const parts = local.split(/[._-]+/).filter(Boolean);
+    if (!parts.length) return '';
+    if (parts.length === 1) return parts[0].charAt(0).toUpperCase();
+    return (parts[0].charAt(0) + parts[1].charAt(0)).toUpperCase();
+}
+
+/**
+ * The header avatar said "US" for every person on earth — left over from the
+ * placeholder avatar service, which was being asked for initials of a user
+ * literally named "User".
+ */
+async function renderIdentity() {
+    const el = document.getElementById('user-initial');
+    if (!el) return;
+
+    const { email } = await getAuthToken();
+    const initials = initialsFromEmail(email);
+
+    if (initials) {
+        el.textContent = initials;
+        el.title = email;
+        el.classList.remove('avatar-signed-out');
+        el.onclick = null;
+        el.removeAttribute('role');
+    } else {
+        // Signed out. Inventing initials for nobody is worse than saying so, and
+        // this is the natural place to offer the way in.
+        el.textContent = '→';
+        el.title = 'Sign in to emode';
+        el.classList.add('avatar-signed-out');
+        el.setAttribute('role', 'button');
+        el.onclick = () => window.open(`${BASE_URL}/login`, '_blank');
+    }
 }
 
 // Listen for messages from content scripts (also fires live while the panel is open)
@@ -316,7 +365,7 @@ async function init() {
     const { emode_dev_base_url } = await chrome.storage.local.get('emode_dev_base_url');
     if (emode_dev_base_url) BASE_URL = emode_dev_base_url;
 
-    await Promise.all([refreshActiveProduct(), loadWardrobe(), loadCart(), loadUsage()]);
+    await Promise.all([renderIdentity(), refreshActiveProduct(), loadWardrobe(), loadCart(), loadUsage()]);
 }
 
 // The panel outlives any one page, so it has to follow the user: a different
@@ -329,7 +378,8 @@ chrome.tabs.onUpdated.addListener((tabId, changeInfo, tab) => {
 // Re-check auth/usage whenever the bridged token changes (e.g. user just signed in)
 chrome.storage.onChanged.addListener((changes, area) => {
     if (area !== 'local') return;
-    if (changes.emode_access_token) {
+    if (changes.emode_access_token || changes.emode_user_email) {
+        renderIdentity();
         loadWardrobe();
         loadUsage();
     }

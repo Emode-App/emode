@@ -71,6 +71,12 @@
     .logo-img { height: 28px; width: auto; display: block; }
 
     /* Local initial rather than a remote avatar service. */
+    .avatar-signed-out {
+      background: rgba(0,0,0,0.06) !important;
+      color: rgba(0,0,0,0.45) !important;
+      cursor: pointer;
+    }
+
     .avatar {
       width: 32px; height: 32px; border-radius: 50%;
       background: var(--purple-gradient);
@@ -272,7 +278,8 @@
     <!-- Was an <img> from ui-avatars.com: a request to a third party every time
          the panel opened, on a surface that knows what the user is shopping for,
          and a broken circle whenever they are offline. -->
-    <div class="avatar" id="user-initial">US</div>
+    <!-- Filled by renderIdentity(); empty until we know who this is. -->
+    <div class="avatar" id="user-initial" aria-label="Account"></div>
   </header>
 
   <div class="glass-card usage-section" style="margin-top: 24px; margin-bottom: 32px;">

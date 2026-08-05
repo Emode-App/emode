@@ -12,26 +12,33 @@ import { supabase } from '../lib/supabase/browser';
  */
 export function ExtensionAuthBridge() {
     useEffect(() => {
-        const broadcast = (accessToken: string | null, userId: string | null, expiresAt: number | null) => {
+        // Email travels too. Without it the extension knows a user is signed in
+        // but nothing about who, so its header could only ever show a placeholder.
+        const broadcast = (
+            accessToken: string | null,
+            userId: string | null,
+            expiresAt: number | null,
+            email: string | null
+        ) => {
             window.postMessage(
-                { source: 'emode-web', type: 'EMODE_AUTH_STATE', accessToken, userId, expiresAt },
+                { source: 'emode-web', type: 'EMODE_AUTH_STATE', accessToken, userId, expiresAt, email },
                 window.location.origin
             );
         };
 
         supabase.auth.getSession().then(({ data: { session } }) => {
-            broadcast(session?.access_token || null, session?.user?.id || null, session?.expires_at || null);
+            broadcast(session?.access_token || null, session?.user?.id || null, session?.expires_at || null, session?.user?.email || null);
         });
 
         const { data: listener } = supabase.auth.onAuthStateChange((_event, session) => {
-            broadcast(session?.access_token || null, session?.user?.id || null, session?.expires_at || null);
+            broadcast(session?.access_token || null, session?.user?.id || null, session?.expires_at || null, session?.user?.email || null);
         });
 
         const onRequest = (event: MessageEvent) => {
             if (event.source !== window || event.origin !== window.location.origin) return;
             if (event.data?.source !== 'emode-extension' || event.data?.type !== 'REQUEST_AUTH_STATE') return;
             supabase.auth.getSession().then(({ data: { session } }) => {
-                broadcast(session?.access_token || null, session?.user?.id || null, session?.expires_at || null);
+                broadcast(session?.access_token || null, session?.user?.id || null, session?.expires_at || null, session?.user?.email || null);
             });
         };
         window.addEventListener('message', onRequest);
