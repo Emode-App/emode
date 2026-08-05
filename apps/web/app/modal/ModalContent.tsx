@@ -309,6 +309,10 @@ export function ModalContent({ initialProduct, onClose }: ModalContentProps) {
                         ? dressingRoomItems.filter(i => selectedIds.includes(i.id)).map(i => i.image)
                         : [product.image],
                     title: product.title,
+                    // Carried through so the server can build a catalogue for
+                    // widget merchants, who have no product sync of their own.
+                    price: product.price,
+                    productUrl: searchParams.get('url') || undefined,
                     merchantId,
                     productId: platformProductId || undefined,
                     visitorId: visitorId || undefined,

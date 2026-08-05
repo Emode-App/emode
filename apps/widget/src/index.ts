@@ -378,7 +378,18 @@ class EmodeWidget {
             body: JSON.stringify({
                 merchantId: this.config.merchantId,
                 visitorId: this.visitorId,
-                productId: ctx.productId || ctx.url,
+                // Only a real platform id here. The URL travels separately: the
+                // server keys products on it, and needs to normalise away query
+                // strings first so ?utm_source and ?variant do not each mint a
+                // new product.
+                productId: ctx.productId,
+                // The merchant has no catalogue in emode — the widget is the only
+                // thing that ever sees these products, so what it scraped to draw
+                // the modal is also what fills in their dashboard.
+                title: ctx.title,
+                image: ctx.image,
+                price: ctx.price,
+                url: ctx.url,
             }),
             keepalive: true,
         }).catch(() => { /* analytics must never affect the storefront */ });
@@ -447,6 +458,7 @@ class EmodeWidget {
             source: 'widget',
             vid: this.visitorId || '',
             origin: window.location.host,
+            url: c.url,
         });
         if (c.productId) params.set('product', c.productId);
         if (action) params.set('action', action);

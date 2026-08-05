@@ -1,5 +1,6 @@
 import { NextResponse } from 'next/server';
 import { createClient } from '@supabase/supabase-js';
+import { resolveOrCaptureProduct } from '../../../lib/product-capture';
 
 const corsHeaders = {
     'Access-Control-Allow-Origin': '*',
@@ -59,23 +60,17 @@ export async function POST(request: Request) {
             return NextResponse.json({ ok: false }, { status: 400, headers: corsHeaders });
         }
 
-        // Resolve the Shopify product reference the same way /api/generate does:
-        // Liquid emits a bare id, syncProducts stores the gid:// form.
-        let productId: string | null = null;
-        const ref = body.productId ? String(body.productId).trim() : '';
-        if (ref) {
-            const candidates = ref.startsWith('gid://')
-                ? [ref]
-                : [`gid://shopify/Product/${ref}`, ref];
-            const { data } = await supabase
-                .from('products')
-                .select('id')
-                .eq('merchant_id', merchantId)
-                .in('platform_product_id', candidates)
-                .limit(1)
-                .maybeSingle();
-            productId = data?.id || null;
-        }
+        // Resolve the product, creating it when this merchant has not been seen
+        // selling it before. Impressions fire on every product page view, so the
+        // catalogue fills in from browsing rather than waiting for someone to
+        // complete a try-on.
+        const productId = await resolveOrCaptureProduct(supabase, merchantId, {
+            platformRef: body.productId ? String(body.productId).trim() : null,
+            title: typeof body.title === 'string' ? body.title : null,
+            image: typeof body.image === 'string' ? body.image : null,
+            price: typeof body.price === 'string' ? body.price : null,
+            url: typeof body.url === 'string' ? body.url : null,
+        });
 
         // UNIQUE (merchant_id, visitor_id, product_id) makes this idempotent, so
         // a shopper reloading a product page twenty times counts once and cannot

@@ -1,4 +1,5 @@
 import { NextResponse } from 'next/server';
+import { resolveOrCaptureProduct, CapturedProduct } from '../../../lib/product-capture';
 import { createHmac } from 'crypto';
 import { aiEngine } from '../../../lib/ai-engine';
 import { createClient } from '@supabase/supabase-js';
@@ -159,31 +160,25 @@ async function consume(subject: Subject, limit: number): Promise<{ allowed: bool
     return { allowed: !!row?.allowed, used: row?.used ?? 0 };
 }
 
-// Map whatever product reference the caller sent onto our own products.id.
+// Map whatever product reference the caller sent onto our own products.id,
+// creating the row when this merchant has not been seen selling it before.
 //
-// The Shopify theme extension passes Liquid's `product.id`, a bare number, but
-// syncProducts stores the GraphQL GID ("gid://shopify/Product/123"). Try both so
-// either form resolves. The widget scrapes the DOM and has no product id at all,
-// which is fine — the generation is still recorded against the merchant.
-async function resolveProductId(merchantId: string, productRef: unknown): Promise<string | null> {
-    if (!merchantId || !productRef) return null;
+// This used to be lookup-only, with the comment "The widget scrapes the DOM and
+// has no product id at all, which is fine". It was not fine: it meant a widget
+// merchant's catalogue stayed permanently empty, so every per-product number on
+// their dashboard was blank and the marketplace listing they pay for could never
+// be populated. See lib/product-capture.ts.
+async function resolveProductId(
+    merchantId: string,
+    productRef: unknown,
+    details: CapturedProduct = {}
+): Promise<string | null> {
+    if (!merchantId) return null;
 
-    const ref = String(productRef).trim();
-    if (!ref) return null;
-
-    const candidates = ref.startsWith('gid://')
-        ? [ref]
-        : [`gid://shopify/Product/${ref}`, ref];
-
-    const { data } = await supabase
-        .from('products')
-        .select('id')
-        .eq('merchant_id', merchantId)
-        .in('platform_product_id', candidates)
-        .limit(1)
-        .maybeSingle();
-
-    return data?.id || null;
+    return resolveOrCaptureProduct(supabase, merchantId, {
+        ...details,
+        platformRef: productRef ? String(productRef).trim() || null : null,
+    });
 }
 
 // Record the try-on for merchant analytics.
@@ -204,9 +199,19 @@ async function recordGeneration(opts: {
     productRef: unknown;
     productImages: string[];
     visitorId: string | null;
+    // What the widget scraped off the merchant's product page. Absent for the
+    // Shopify extension, which supplies a real product id instead.
+    title?: string | null;
+    price?: string | null;
+    url?: string | null;
 }) {
     try {
-        const productId = await resolveProductId(opts.merchantId, opts.productRef);
+        const productId = await resolveProductId(opts.merchantId, opts.productRef, {
+            title: opts.title,
+            image: opts.productImages[0] || null,
+            price: opts.price,
+            url: opts.url,
+        });
 
         await supabase.from('generations').insert({
             user_id: opts.userId || null,
@@ -321,6 +326,9 @@ export async function POST(request: Request) {
                 productRef: body.productId,
                 productImages: body.productImages,
                 visitorId: typeof body.visitorId === 'string' ? body.visitorId.slice(0, 64) : null,
+                title: typeof body.title === 'string' ? body.title : null,
+                price: typeof body.price === 'string' ? body.price : null,
+                url: typeof body.productUrl === 'string' ? body.productUrl : null,
             });
         }
 

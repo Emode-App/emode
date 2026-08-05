@@ -1,4 +1,5 @@
 import { createClient } from '@supabase/supabase-js';
+import { resolveOrCaptureProduct } from '../../../../lib/product-capture';
 import { NextResponse } from 'next/server';
 
 const corsHeaders = {
@@ -42,36 +43,28 @@ export async function POST(request: Request) {
 
         const resolvedMerchantId = typeof merchantId === 'string' && UUID_RE.test(merchantId) ? merchantId : null;
 
-        // 1. Find or create Product.
-        // Note: select-then-insert, NOT upsert — platform_product_id has no unique
-        // constraint, so ON CONFLICT would be rejected by Postgres.
-        const productId = title.toLowerCase().replace(/\s+/g, '-').substring(0, 50);
-        let { data: pData } = await supabase
-            .from('products')
-            .select('id, merchant_id')
-            .eq('platform_product_id', productId)
-            .limit(1)
-            .maybeSingle();
-
-        if (!pData) {
-            const { data: inserted, error: pError } = await supabase
-                .from('products')
-                .insert({
-                    platform_product_id: productId,
-                    title: title,
-                    primary_image_url: image,
-                    buy_url: url || '',
-                    merchant_id: resolvedMerchantId,
-                })
-                .select('id, merchant_id')
-                .single();
-            if (pError || !inserted) throw pError || new Error('Failed to create product');
-            pData = inserted;
-        } else if (!pData.merchant_id && resolvedMerchantId) {
-            // Product was first discovered without merchant context (e.g. via the
-            // Chrome extension) — claim it for the merchant now that we know them.
-            await supabase.from('products').update({ merchant_id: resolvedMerchantId }).eq('id', pData.id);
+        // 1. Find or create Product — shared with /api/generate and
+        //    /api/impression so all three agree on what identifies a product.
+        //
+        // This block used to key products on a slug of the title and look them up
+        // WITHOUT filtering by merchant. Every store selling a "Black Hoodie"
+        // therefore shared one row: the second merchant's shopper was handed the
+        // first merchant's product, and their try-on was recorded against a store
+        // they had never heard of. If the existing row happened to be unowned, the
+        // next merchant to touch it claimed it outright.
+        const resolvedProductId = await resolveOrCaptureProduct(supabase, resolvedMerchantId || '', {
+            title,
+            image,
+            url,
+            price,
+        });
+        if (!resolvedProductId) {
+            return NextResponse.json(
+                { error: 'Could not resolve the product.' },
+                { status: 400, headers: corsHeaders }
+            );
         }
+        const pData = { id: resolvedProductId };
 
         // 2. Find or create Variant (same constraint caveat as products)
         let { data: vData } = await supabase
