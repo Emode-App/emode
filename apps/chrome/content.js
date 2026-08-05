@@ -796,7 +796,44 @@ function openModal(context) {
     document.body.appendChild(overlay);
 }
 
+/**
+ * Does this store already run emode itself?
+ *
+ * Three surfaces can put try-on buttons on a product page — the merchant's
+ * widget, the Shopify theme extension, and this extension — and until now
+ * nothing stopped two of them doing it at once. Any merchant paying for emode,
+ * visited by a shopper who also installed the extension, got two sets of
+ * buttons stacked on their product page.
+ *
+ * The store's own installation wins, always. It is the thing the merchant is
+ * paying for, it is styled to their theme, and its try-ons are attributed to
+ * them. This extension exists for the stores that DON'T have it.
+ *
+ * The script tag is checked as well as the rendered container, because the
+ * widget injects asynchronously — waiting for its buttons to appear would mean
+ * showing ours first and yanking them away, which is its own kind of broken.
+ */
+const STORE_EMODE_SELECTORS = [
+    'script[data-emode-merchant]',           // widget installed, before it draws
+    '.emode-integration-container',          // widget has drawn
+    '.emode-buttons',                        // Shopify theme extension
+    '#emode-try-on',                         // Shopify theme extension, older markup
+];
+
+function storeHasEmode() {
+    return STORE_EMODE_SELECTORS.some((sel) => document.querySelector(sel));
+}
+
 function injectButtons() {
+    // Stand down on stores that already have emode. Checked before anything
+    // else, and it removes our own buttons if we got there first — on a slow
+    // connection the extension can inject before the merchant's widget script
+    // has even loaded.
+    if (storeHasEmode()) {
+        document.querySelector('.emode-extension-injected')?.remove();
+        return;
+    }
+
     const urlChanged = lastScannedUrl !== window.location.href;
     const existing = document.querySelector('.emode-extension-injected');
 
@@ -1033,7 +1070,11 @@ document.addEventListener('mouseover', (e) => {
     // place a shopper is most obviously shopping and the one place the pill was
     // switched off. The page type is the wrong question; the card is checked
     // directly by isValidProductCard, which is strict enough now to carry it.
-    if (isEmodeApp()) return;
+    //
+    // The pill stands down on stores running emode too. Their buttons and ours
+    // look different, and two flavours of the same feature on one storefront
+    // reads as a bug rather than as two products.
+    if (isEmodeApp() || storeHasEmode()) return;
 
     let target = e.target;
 
