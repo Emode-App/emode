@@ -23,7 +23,11 @@ function isEmodeApp() {
     return window.location.origin === BASE_URL ||
         window.location.hostname === 'emode.style' ||
         window.location.hostname === 'emode.ai' ||
-        window.location.hostname === 'localhost' ||
+        // Only emode's own local dev server, not every localhost. A merchant
+        // building their store on localhost:3100 is running a storefront, and
+        // treating all of localhost as "this is emode" silently switched the
+        // extension off on exactly the sites developers test with.
+        (window.location.hostname === 'localhost' && window.location.port === '3000') ||
         window.location.pathname.startsWith('/modal');
 }
 
@@ -82,30 +86,27 @@ function showToast(message) {
     }, 3000);
 }
 
+/**
+ * Is this a product page?
+ *
+ * Delegates to detect.js, which the widget's detection was ported into after it
+ * was verified against real storefronts. What this replaced tested for
+ * og:type="product" or a button whose text contained "add to"/"bag"/"buy" —
+ * conventions, not standards, and the stores most worth supporting are the least
+ * likely to follow them. Gucci sets no og:type and shows "SELECT SIZE" until a
+ * size is chosen, so a $2,250 jacket page was ruled out while the page carried
+ * complete Product JSON-LD the whole time.
+ */
 function isPDP() {
     if (isEmodeApp()) return false;
+    if (!global_detect()) return false;
+    return global_detect().isProductPage();
+}
 
-    const text = document.body.innerText.toUpperCase();
-    const hasSize = Array.from(document.querySelectorAll('*')).some(el => {
-        return el.children.length === 0 &&
-            el.textContent.toUpperCase().includes('SIZE') &&
-            el.offsetWidth > 0;
-    });
-
-    const hasPrice = /\$\s?\d+/.test(text);
-
-    // Check for "Add to..." buttons
-    const ctaButtons = Array.from(document.querySelectorAll('button, [role="button"]')).filter(btn => {
-        const btnText = btn.textContent.toUpperCase();
-        return ECOM_KEYWORDS.some(k => btnText.includes(k)) && btn.offsetWidth > 0;
-    });
-
-    const isProductType = document.querySelector('meta[property="og:type"]')?.content === 'product';
-    const multipleCTAs = ctaButtons.length > 5; // Usually a catalog/grid if there are many "Buy" buttons
-
-    const decision = (isProductType || (hasSize && hasPrice && ctaButtons.length > 0)) && !multipleCTAs;
-
-    return decision;
+/** detect.js runs first in the same content-script scope; guard anyway so a
+ *  load-order regression degrades instead of throwing on every page. */
+function global_detect() {
+    return (typeof window !== 'undefined' && window.emodeDetect) || null;
 }
 
 function isCatalogPage() {
@@ -655,35 +656,25 @@ function extractProductContext() {
 
     title = cleanTitle(title);
 
-    // 3. Find the main product image
+    // 3. Find the main product image.
+    //
+    // og:image is the SHARE image, chosen to look good in a link preview, which
+    // on a fashion site routinely means a styled lifestyle shot. This preferred
+    // it over everything — so a product page showing a large clean cutout of the
+    // trousers handed the generator a photo of someone standing across a
+    // courtyard wearing them, which nobody can try on.
+    //
+    // What the shopper is looking at is the better signal. Rank by rendered
+    // area, and fall back to the metadata only when the page offers nothing.
+    const detect = global_detect();
+    const onPage = detect ? detect.imageCandidates(document) : [];
     const ogImage = document.querySelector('meta[property="og:image"]')?.content;
 
-    // Get all visible images, sorted by size (largest first)
-    const images = Array.from(document.querySelectorAll('img'))
-        .filter(img => {
-            const rect = img.getBoundingClientRect();
-            return rect.width > 200 && rect.height > 200 && img.offsetWidth > 0 && img.src;
-        })
-        .map(img => ({
-            element: img,
-            rect: img.getBoundingClientRect(),
-            area: img.getBoundingClientRect().width * img.getBoundingClientRect().height,
-            src: img.src,
-            isMain: img.className.toLowerCase().includes('main') ||
-                   img.id.toLowerCase().includes('main') ||
-                   img.className.toLowerCase().includes('product') ||
-                   img.src.includes('product')
-        }))
-        .sort((a, b) => {
-            // Prioritize images marked as main/product
-            if (a.isMain && !b.isMain) return -1;
-            if (!a.isMain && b.isMain) return 1;
-            // Then sort by size (largest first)
-            return b.area - a.area;
-        });
+    let mainImage = (onPage[0] && onPage[0].area > 90000 ? onPage[0].src : null) || ogImage || (onPage[0] && onPage[0].src);
 
-    // Get the best image URL
-    let mainImage = ogImage || images[0]?.src;
+    // Every candidate, so the modal can offer a swap when the guess is wrong.
+    // No heuristic gets this right everywhere, and picking again is a click.
+    const alternateImages = onPage.map((c) => c.src).slice(0, 8);
 
     // Ensure absolute URL
     if (mainImage && !mainImage.startsWith('http')) {
@@ -701,7 +692,7 @@ function extractProductContext() {
         imageCount: images.length
     });
     console.groupEnd();
-    return { title, image: mainImage, price: priceText };
+    return { title, image: mainImage, price: priceText, alternateImages };
 }
 
 function openModal(context) {

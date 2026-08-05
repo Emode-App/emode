@@ -24,8 +24,10 @@
                 "<all_urls>"
             ],
             "js": [
+                "detect.js",
                 "content.js"
-            ]
+            ],
+            "run_at": "document_idle"
         },
         {
             "matches": [
