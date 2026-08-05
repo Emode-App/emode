@@ -50,6 +50,9 @@ export const Navbar = () => {
                         <Link href="/marketplace" className="hover:text-accent-gold transition-colors">Marketplace</Link>
                         <Link href="/#extensions" className="hover:text-accent-gold transition-colors">Extensions</Link>
                         <Link href="/#pricing" className="hover:text-accent-gold transition-colors">Pricing</Link>
+                        {/* The app is a different product for a different person;
+                            it needs a way in that is not scrolling past the plans. */}
+                        <Link href="/#app" className="hover:text-accent-gold transition-colors">The App</Link>
                     </div>
                 </div>
 

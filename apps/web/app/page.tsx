@@ -7,6 +7,7 @@ import { Hero } from '../components/Hero';
 import { Sparkles, Zap, Shield, Globe, Check, X, ArrowRight, ShoppingCart, Plus } from 'lucide-react';
 import { useState, useEffect } from 'react';
 import { supabase } from '../lib/supabase/browser';
+import { ConsumerApp } from '../components/ConsumerApp';
 
 export default function Home() {
     const [billingCycle, setBillingCycle] = useState<'monthly' | 'lifetime'>('monthly');
@@ -297,6 +298,11 @@ export default function Home() {
                     </div>
                 </div>
             </section>
+
+            {/* After pricing: a brand reading this page came to install try-on,
+                and should reach the plans before being told about an app they
+                are not the customer for. */}
+            <ConsumerApp />
 
             <Footer />
         </div>
