@@ -63,7 +63,7 @@ export function FAQ() {
                     Questions
                 </h2>
                 <p className="text-charcoal/50 mb-12">
-                    Still stuck? <a href="mailto:support@emode.style" className="underline hover:text-charcoal">Email us</a> — a person answers.
+                    Still stuck? <a href="mailto:support@emode.style" className="underline hover:text-charcoal">Email us</a>.
                 </p>
 
                 <div className="divide-y divide-black/5 border-y border-black/5">

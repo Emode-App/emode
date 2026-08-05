@@ -5,20 +5,20 @@ export const Hero = () => {
     // pt-40 left roughly 80px of dead space below a nav that is only ~72px tall.
     // Clear the nav and stop.
     return (
-        <section className="relative pt-28 md:pt-32 pb-20 overflow-hidden">
+        <section className="relative pt-24 md:pt-28 pb-16 overflow-hidden">
             <div className="max-w-[90rem] mx-auto px-8 relative z-10 grid grid-cols-1 lg:grid-cols-12 gap-12 items-center">
                 <div className="lg:col-span-5 flex-shrink-0 mb-16 lg:mb-0 pr-4">
-                    <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-black/5 border border-black/10 text-xs font-semibold uppercase tracking-widest text-charcoal mb-8">
+                    <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-black/5 border border-black/10 text-xs font-semibold uppercase tracking-widest text-charcoal mb-6">
                         <span className="w-2 h-2 rounded-full bg-purple-500 animate-pulse"></span>
                         The Future of Fashion
                     </div>
 
-                    <h1 className="text-6xl md:text-8xl lg:text-[6rem] xl:text-[7rem] font-heading font-bold leading-[0.9] tracking-tighter mb-8">
+                    <h1 className="text-6xl md:text-8xl lg:text-[6rem] xl:text-[7rem] font-heading font-bold leading-[0.9] tracking-tighter mb-6">
                         DRESS WITHOUT <br />
                         <span className="bg-purple-gradient bg-clip-text text-transparent underline decoration-accent-gold/30">LIMITS.</span>
                     </h1>
 
-                    <p className="text-xl text-charcoal/70 leading-relaxed mb-10 max-w-lg">
+                    <p className="text-xl text-charcoal/70 leading-relaxed mb-8 max-w-lg">
                         Professional-grade virtual try-ons for the modern shopper.
                         Experience high-fashion collections in your digital dressing room.
                     </p>

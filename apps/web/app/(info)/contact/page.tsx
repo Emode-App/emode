@@ -1,6 +1,7 @@
 import { Metadata } from 'next';
 import { Mail, MapPin, MessageSquare, Terminal } from 'lucide-react';
 import { SUPPORT_EMAIL, API_EMAIL, FOUNDERS_EMAIL } from '../../../lib/site';
+import { EnterpriseBooking } from '../../../components/EnterpriseBooking';
 
 export const metadata: Metadata = {
     title: 'Contact Us | emodeAI',
@@ -41,11 +42,13 @@ export default function ContactPage() {
                 </div>
                 <h3 className="text-2xl font-heading font-bold mb-3 relative z-10">Enterprise Partnerships</h3>
                 <p className="text-white/60 mb-6 relative z-10 max-w-lg">
-                    If you are a large-scale e-commerce platform processing over 50,000 try-ons monthly, contact our founder directly for dedicated GPU provisioning and white-glove onboarding.
+                    Thousands of SKUs, a stack that isn&apos;t off the shelf, a security review to
+                    get through, or volumes the published plans don&apos;t cover. Book a call and
+                    we&apos;ll work out what it takes.
                 </p>
-                <a href={`mailto:${FOUNDERS_EMAIL}`} className="inline-flex btn-primary py-3 px-8 rounded-full text-sm font-bold relative z-10 text-black">
-                    Contact Founders
-                </a>
+                <div className="relative z-10">
+                    <EnterpriseBooking />
+                </div>
             </div>
         </article>
     );

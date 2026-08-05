@@ -8,7 +8,6 @@ import { Sparkles, Zap, Shield, Globe, Check, X, ArrowRight, ShoppingCart, Plus 
 import { useState, useEffect } from 'react';
 import { supabase } from '../lib/supabase/browser';
 import { ConsumerApp } from '../components/ConsumerApp';
-import { Enterprise } from '../components/Enterprise';
 import { FAQ } from '../components/FAQ';
 
 export default function Home() {
@@ -300,10 +299,6 @@ export default function Home() {
                     </div>
                 </div>
             </section>
-
-            {/* Enterprise sits with pricing: it is the plan for people the cards
-                above do not fit, and it belongs where they are already comparing. */}
-            <Enterprise />
 
             {/* Objections answered before the pitch for a different product. */}
             <FAQ />
