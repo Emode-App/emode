@@ -221,7 +221,9 @@ export default async function AdminDashboard() {
                                     </div>
                                 </div>
                                 <div className="text-right">
-                                    <p className="font-bold text-sm">{product.tryOnCount.toLocaleString()} Try‑ons</p>
+                                    <p className="font-bold text-sm">
+                                        {product.tryOnCount.toLocaleString()} Try‑on{product.tryOnCount === 1 ? '' : 's'}
+                                    </p>
                                 </div>
                             </div>
                         ))}

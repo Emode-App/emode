@@ -566,7 +566,7 @@ export function ModalContent({ initialProduct, onClose }: ModalContentProps) {
                             {selectedItems.length > 0 ? (
                                 <div>
                                     <span className="text-[10px] uppercase tracking-[0.2em] font-bold text-accent-gold mb-3 block">
-                                        Trying On · {selectedItems.length} pieces
+                                        Trying On · {selectedItems.length} piece{selectedItems.length === 1 ? '' : 's'}
                                     </span>
                                     <div className="flex flex-col gap-3 mb-6">
                                         {selectedItems.map((item) => (
