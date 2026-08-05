@@ -1,7 +1,7 @@
 'use client';
 
 import { useState } from 'react';
-import { Sparkles, Download, Lock, AlertCircle } from 'lucide-react';
+import { Sparkles, Download, Lock, AlertCircle, UserCheck } from 'lucide-react';
 import { supabase } from '../../../lib/supabase/browser';
 
 export type StudioProduct = {
@@ -58,54 +58,114 @@ export function StudioClient({
     products,
     initialAssets,
     canDescribeScene,
+    isPremium,
+    initialHouseModelUrl,
 }: {
     products: StudioProduct[];
     initialAssets: StudioAsset[];
     canDescribeScene: boolean;
+    isPremium: boolean;
+    initialHouseModelUrl: string | null;
 }) {
     const usable = products.filter((p) => p.primary_image_url);
 
-    const [selected, setSelected] = useState<string>(usable[0]?.id || '');
+    // Batch selection. A single product is the common case, so it starts as one
+    // rather than making everyone opt in to a mode.
+    const [selectedIds, setSelectedIds] = useState<string[]>(usable[0] ? [usable[0].id] : []);
     const [model, setModel] = useState('');
     const [scene, setScene] = useState('');
+    const [variations, setVariations] = useState(1);
+    const [useHouseModel, setUseHouseModel] = useState(false);
+    const [houseModelUrl, setHouseModelUrl] = useState<string | null>(initialHouseModelUrl);
     const [busy, setBusy] = useState(false);
+    const [progress, setProgress] = useState<{ done: number; total: number } | null>(null);
     const [error, setError] = useState<string | null>(null);
     const [assets, setAssets] = useState<StudioAsset[]>(initialAssets);
 
+    const toggleProduct = (id: string) => {
+        if (!isPremium) return setSelectedIds([id]); // No batch below Growth.
+        setSelectedIds((prev) =>
+            prev.includes(id) ? prev.filter((p) => p !== id) : [...prev, id]
+        );
+    };
+
+    const setHouseModel = async (assetId: string | null) => {
+        try {
+            const { data: { session } } = await supabase.auth.getSession();
+            if (!session) return;
+            const res = await fetch('/api/assets/model-shot', {
+                method: 'PATCH',
+                headers: {
+                    'Content-Type': 'application/json',
+                    Authorization: `Bearer ${session.access_token}`,
+                },
+                body: JSON.stringify({ assetId }),
+            });
+            const data = await res.json();
+            if (res.ok) setHouseModelUrl(data.houseModelUrl);
+            else setError(data.error);
+        } catch {
+            setError('Could not update the house model.');
+        }
+    };
+
     const generate = async () => {
-        if (!selected) return;
+        if (!selectedIds.length) return;
         setBusy(true);
         setError(null);
+        setProgress({ done: 0, total: selectedIds.length });
 
         try {
             const { data: { session } } = await supabase.auth.getSession();
             if (!session) throw new Error('Your session expired. Refresh and try again.');
 
-            const res = await fetch('/api/assets/model-shot', {
-                method: 'POST',
-                headers: {
-                    'Content-Type': 'application/json',
-                    Authorization: `Bearer ${session.access_token}`,
-                },
-                body: JSON.stringify({ productId: selected, model, scene }),
-            });
-            const data = await res.json();
-            if (!res.ok) throw new Error(data.error || 'Could not generate that.');
+            const failures: string[] = [];
 
-            setAssets((prev) => [
-                {
-                    id: data.assetId || crypto.randomUUID(),
-                    product_id: selected,
-                    public_url: data.url,
-                    options: { model: model || null, scene: scene || null },
-                    created_at: new Date().toISOString(),
-                },
-                ...prev,
-            ]);
+            // One request per product, in sequence, rather than one request for
+            // the batch. A serverless function has a wall-clock limit and fifty
+            // products would blow through it; this also lets progress move and a
+            // single failure not take the rest down.
+            for (const productId of selectedIds) {
+                const res = await fetch('/api/assets/model-shot', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                        Authorization: `Bearer ${session.access_token}`,
+                    },
+                    body: JSON.stringify({ productId, model, scene, variations, useHouseModel }),
+                });
+                const data = await res.json();
+
+                if (!res.ok) {
+                    failures.push(usable.find((p) => p.id === productId)?.title || 'a product');
+                } else {
+                    setAssets((prev) => [
+                        ...(data.assets || []).map((a: { id: string; url: string }) => ({
+                            id: a.id,
+                            product_id: productId,
+                            public_url: a.url,
+                            options: { model: model || null, scene: scene || null },
+                            created_at: new Date().toISOString(),
+                        })),
+                        ...prev,
+                    ]);
+                }
+
+                setProgress((p) => (p ? { ...p, done: p.done + 1 } : p));
+            }
+
+            if (failures.length) {
+                setError(
+                    failures.length === selectedIds.length
+                        ? 'None of those could be generated.'
+                        : `Couldn’t generate: ${failures.slice(0, 3).join(', ')}${failures.length > 3 ? ` and ${failures.length - 3} more` : ''}.`
+                );
+            }
         } catch (err: any) {
             setError(err.message);
         } finally {
             setBusy(false);
+            setProgress(null);
         }
     };
 
@@ -123,22 +183,36 @@ export function StudioClient({
         );
     }
 
-    const current = usable.find((p) => p.id === selected);
+    const selectedCount = selectedIds.length;
 
     return (
         <>
             <div className="grid grid-cols-1 lg:grid-cols-[1fr_340px] gap-8 mb-16">
                 <div>
-                    <p className="text-xs font-bold uppercase tracking-widest text-charcoal/40 mb-4">
-                        Pick a product
-                    </p>
+                    <div className="flex items-baseline justify-between mb-4">
+                        <p className="text-xs font-bold uppercase tracking-widest text-charcoal/40">
+                            {isPremium ? 'Pick products' : 'Pick a product'}
+                        </p>
+                        {isPremium && (
+                            <button
+                                onClick={() =>
+                                    setSelectedIds(
+                                        selectedCount === usable.length ? [] : usable.map((p) => p.id)
+                                    )
+                                }
+                                className="text-[11px] font-bold uppercase tracking-widest text-charcoal/40 hover:text-charcoal transition-colors"
+                            >
+                                {selectedCount === usable.length ? 'Clear' : `Select all ${usable.length}`}
+                            </button>
+                        )}
+                    </div>
                     <div className="grid grid-cols-2 sm:grid-cols-4 gap-4">
                         {usable.map((p) => (
                             <button
                                 key={p.id}
-                                onClick={() => setSelected(p.id)}
+                                onClick={() => toggleProduct(p.id)}
                                 className={`text-left rounded-xl overflow-hidden border-2 transition-all bg-white ${
-                                    selected === p.id
+                                    selectedIds.includes(p.id)
                                         ? 'border-accent-gold ring-4 ring-accent-gold/10'
                                         : 'border-transparent hover:border-black/10'
                                 }`}
@@ -159,7 +233,11 @@ export function StudioClient({
 
                 <div className="p-6 bg-white rounded-2xl border border-black/5 h-fit">
                     <h2 className="font-bold mb-1">
-                        {current ? current.title : 'Select a product'}
+                        {selectedCount === 0
+                            ? 'Nothing selected'
+                            : selectedCount === 1
+                                ? usable.find((p) => p.id === selectedIds[0])?.title
+                                : `${selectedCount} products`}
                     </h2>
                     <p className="text-xs text-charcoal/40 mb-6">
                         Studio shot on white unless you say otherwise.
@@ -224,19 +302,113 @@ export function StudioClient({
                             : 'Custom scenes are on Growth and Lifetime Founder. Shots are on white until then.'}
                     </p>
 
+                    {/* House model. The reason a lookbook books one model for a
+                        season is consistency, and it is exactly what a written
+                        description cannot give you — the same words produce a
+                        different face every time. */}
+                    <div className="mb-6 pt-6 border-t border-black/5">
+                        <label className="text-xs font-bold uppercase tracking-widest text-charcoal/40 mb-3 flex items-center gap-2">
+                            House model
+                            {!isPremium && <Lock className="w-3 h-3" />}
+                        </label>
+
+                        {houseModelUrl ? (
+                            <div className="flex items-center gap-3">
+                                {/* eslint-disable-next-line @next/next/no-img-element */}
+                                <img
+                                    src={houseModelUrl}
+                                    alt="Your house model"
+                                    className="w-12 h-16 rounded-lg object-cover bg-off-white shrink-0"
+                                />
+                                <div className="min-w-0 flex-1">
+                                    <label className="flex items-center gap-2 text-sm cursor-pointer">
+                                        <input
+                                            type="checkbox"
+                                            checked={useHouseModel}
+                                            onChange={(e) => setUseHouseModel(e.target.checked)}
+                                            disabled={!isPremium}
+                                            className="accent-black"
+                                        />
+                                        Use the same person
+                                    </label>
+                                    <button
+                                        onClick={() => { setHouseModel(null); setUseHouseModel(false); }}
+                                        className="text-[11px] text-charcoal/40 hover:text-charcoal underline mt-1"
+                                    >
+                                        Clear
+                                    </button>
+                                </div>
+                            </div>
+                        ) : (
+                            <p className="text-[11px] text-charcoal/40 leading-relaxed">
+                                {isPremium
+                                    ? 'Generate a shot you like, then set it as your house model from the library below. Every shot after that uses the same person.'
+                                    : 'One model across your whole catalogue, on Growth and Lifetime Founder.'}
+                            </p>
+                        )}
+                    </div>
+
+                    {/* Variations: each is a separate model call, which is why it
+                        is capped and why it sits on the higher tier. */}
+                    <div className="mb-6">
+                        <label className="text-xs font-bold uppercase tracking-widest text-charcoal/40 mb-3 flex items-center gap-2">
+                            Takes per product
+                            {!isPremium && <Lock className="w-3 h-3" />}
+                        </label>
+                        <div className="flex gap-2">
+                            {[1, 2, 3, 4].map((n) => (
+                                <button
+                                    key={n}
+                                    onClick={() => isPremium && setVariations(n)}
+                                    disabled={!isPremium && n > 1}
+                                    className={`flex-1 py-2 rounded-lg text-sm font-bold border transition-colors ${
+                                        variations === n
+                                            ? 'bg-obsidian text-white border-obsidian'
+                                            : 'bg-white border-black/10 text-charcoal/50 hover:border-black/30'
+                                    } disabled:opacity-30 disabled:cursor-not-allowed`}
+                                >
+                                    {n}
+                                </button>
+                            ))}
+                        </div>
+                        <p className="text-[11px] text-charcoal/40 mt-2 leading-relaxed">
+                            {isPremium
+                                ? 'More takes, pick the best. Each one counts against your daily allowance.'
+                                : 'Multiple takes are on Growth and Lifetime Founder.'}
+                        </p>
+                    </div>
+
                     <button
                         onClick={generate}
-                        disabled={busy || !selected}
+                        disabled={busy || !selectedCount}
                         className="w-full btn-generate py-4 text-xs font-bold uppercase tracking-widest inline-flex items-center justify-center gap-2 disabled:opacity-50"
                     >
                         <Sparkles className="w-4 h-4" />
-                        {busy ? 'Shooting…' : 'Generate model shot'}
+                        {busy
+                            ? 'Shooting…'
+                            : selectedCount > 1
+                                ? `Generate ${selectedCount * variations} shots`
+                                : variations > 1
+                                    ? `Generate ${variations} takes`
+                                    : 'Generate model shot'}
                     </button>
 
                     {busy && (
-                        <p className="text-[11px] text-charcoal/40 mt-3 text-center">
-                            Usually 10–20 seconds.
-                        </p>
+                        <div className="mt-3">
+                            {progress && progress.total > 1 && (
+                                <div className="h-1 bg-black/5 rounded-full overflow-hidden mb-2">
+                                    <div
+                                        className="h-full bg-obsidian transition-all duration-500"
+                                        style={{ width: `${(progress.done / progress.total) * 100}%` }}
+                                    />
+                                </div>
+                            )}
+                            <p className="text-[11px] text-charcoal/40 text-center">
+                                {progress && progress.total > 1
+                                    ? `${progress.done} of ${progress.total} products`
+                                    : 'Usually 10–20 seconds.'}
+                            </p>
+                        </div>
                     )}
 
                     {error && (
@@ -264,16 +436,32 @@ export function StudioClient({
                             <div key={a.id} className="group relative bg-white rounded-2xl overflow-hidden border border-black/5">
                                 {/* eslint-disable-next-line @next/next/no-img-element */}
                                 <img src={a.public_url} alt="Generated model shot" className="w-full block" />
-                                <a
-                                    href={a.public_url}
-                                    download
-                                    target="_blank"
-                                    rel="noopener noreferrer"
-                                    className="absolute top-3 right-3 w-9 h-9 rounded-full bg-white/90 backdrop-blur-sm shadow-sm flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity"
-                                    aria-label="Download"
-                                >
-                                    <Download className="w-4 h-4" />
-                                </a>
+                                <div className="absolute top-3 right-3 flex gap-2 opacity-0 group-hover:opacity-100 transition-opacity">
+                                    {isPremium && (
+                                        <button
+                                            onClick={() => { setHouseModel(a.id); setUseHouseModel(true); }}
+                                            title="Use this person for every shot"
+                                            aria-label="Set as house model"
+                                            className={`w-9 h-9 rounded-full backdrop-blur-sm shadow-sm flex items-center justify-center transition-colors ${
+                                                houseModelUrl === a.public_url
+                                                    ? 'bg-accent-gold text-black'
+                                                    : 'bg-white/90 hover:bg-white'
+                                            }`}
+                                        >
+                                            <UserCheck className="w-4 h-4" />
+                                        </button>
+                                    )}
+                                    <a
+                                        href={a.public_url}
+                                        download
+                                        target="_blank"
+                                        rel="noopener noreferrer"
+                                        className="w-9 h-9 rounded-full bg-white/90 backdrop-blur-sm shadow-sm flex items-center justify-center hover:bg-white transition-colors"
+                                        aria-label="Download"
+                                    >
+                                        <Download className="w-4 h-4" />
+                                    </a>
+                                </div>
                                 {(a.options?.model || a.options?.scene) && (
                                     <p className="p-3 text-[11px] text-charcoal/50 truncate">
                                         {[a.options.model, a.options.scene].filter(Boolean).join(' · ')}

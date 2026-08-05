@@ -34,3 +34,14 @@ create index if not exists product_assets_product_idx on public.product_assets (
 -- these are destined for public product pages; the paths are namespaced by
 -- merchant id and unguessable.
 alter table public.product_assets enable row level security;
+
+-- The house model: one reusable person across a brand's whole catalogue.
+--
+-- Stored on the merchant rather than as another asset row, because there is
+-- exactly one and it is a property of the brand rather than of any product.
+-- Brand consistency is why a lookbook books one model for a season, and it is
+-- the thing a written description cannot give you — the same words produce a
+-- different face every time.
+alter table public.merchants
+  add column if not exists house_model_url text,
+  add column if not exists house_model_description text;

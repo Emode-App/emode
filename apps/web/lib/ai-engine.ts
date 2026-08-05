@@ -239,6 +239,13 @@ class AIEngine {
         /** Free-text, merchant-chosen. Empty means unspecified rather than default. */
         model?: string;
         /**
+         * A previously generated shot whose model should be reused. Brand
+         * consistency is why a lookbook books one model for a season, and it is
+         * the thing a described model cannot give you — the same words produce a
+         * different face every time.
+         */
+        houseModelUrl?: string;
+        /**
          * A described scene, on plans that allow it. Absent means the default: a
          * white seamless studio, which is what a product page actually wants and
          * what a merchant can drop straight into a catalogue.
@@ -251,6 +258,9 @@ class AIEngine {
 
         const startTime = Date.now();
         const productPart = await this.urlToGenerativePart(opts.productImageUrl);
+        const housePart = opts.houseModelUrl
+            ? await this.urlToGenerativePart(opts.houseModelUrl)
+            : null;
 
         const scene = opts.scene?.trim();
 
@@ -270,8 +280,13 @@ class AIEngine {
             You are a fashion photographer producing a product image for a brand's own store.
 
             Input 1: a photograph of a single garment, laid flat or cut out.
+            ${housePart ? 'Input 2: a photograph of the model to use.' : ''}
 
             Produce one photorealistic image of a human model wearing that garment.
+
+            ${housePart
+                ? `THE MODEL IS GIVEN. Use the person in Input 2 — the same face, the same hair, the same body, the same skin tone. This is one model photographed on a second occasion wearing a different garment, not a similar-looking person. Their identity must be recognisably consistent; only the clothing and the pose change.`
+                : ''}
 
             THE GARMENT IS THE SUBJECT and must be reproduced EXACTLY as photographed:
             same colour, same fabric and weave, same pattern and its placement, same
@@ -280,8 +295,10 @@ class AIEngine {
             it is shown fastened, it stays fastened. A shopper will buy this garment
             expecting exactly what is in this picture.
 
-            The model: ${opts.model?.trim() || 'an adult of any appearance, naturally proportioned'}.
-            ${poseDirection}
+            ${housePart
+                ? poseDirection
+                : `The model: ${opts.model?.trim() || 'an adult of any appearance, naturally proportioned'}.
+            ${poseDirection}`}
 
             ${sceneDirection}
 
@@ -316,7 +333,12 @@ class AIEngine {
         let resultUrl = '';
         try {
             const result = await this.model.generateContent({
-                contents: [{ role: "user", parts: [{ text: prompt }, productPart] }],
+                contents: [{
+                    role: "user",
+                    parts: housePart
+                        ? [{ text: prompt }, productPart, housePart]
+                        : [{ text: prompt }, productPart],
+                }],
                 generationConfig: { responseModalities: ['IMAGE', 'TEXT'] } as any,
             });
 

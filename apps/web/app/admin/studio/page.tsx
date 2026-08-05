@@ -9,6 +9,9 @@ export const dynamic = 'force-dynamic';
 const ASSET_PLANS = new Set(['pro', 'growth', 'lifetime_pro', 'lifetime_founder']);
 const SCENE_PLANS = new Set(['growth', 'lifetime_founder']);
 
+/** House model, batch, and multiple takes. Capability, not convenience. */
+const PREMIUM_PLANS = new Set(['growth', 'lifetime_founder']);
+
 export default async function StudioPage() {
     const merchant = await getMerchantForUser();
 
@@ -81,6 +84,8 @@ export default async function StudioPage() {
                 products={(products || []) as StudioProduct[]}
                 initialAssets={(assets || []) as StudioAsset[]}
                 canDescribeScene={SCENE_PLANS.has(merchant.plan)}
+                isPremium={PREMIUM_PLANS.has(merchant.plan)}
+                initialHouseModelUrl={merchant.house_model_url || null}
             />
         </div>
     );
