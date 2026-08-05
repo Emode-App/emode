@@ -45,13 +45,39 @@ const PILLARS = [
     },
 ];
 
+/**
+ * The official Apple and Google store badges.
+ *
+ * Rendered unmodified, which both companies require — no recolouring, no
+ * redrawing, no squashing to fit. Both supplied lockups are black on black, and
+ * this section is near-black, so they sit on a light plate rather than being
+ * altered to suit the background. Apple ships a white lockup for dark surfaces
+ * if that reads better; swapping the file is the only change needed.
+ *
+ * Sized by height so the two match optically, since their artboards differ
+ * (119.66x40 against 180x53.33).
+ */
+function StoreBadges() {
+    return (
+        <div className="group relative">
+            <div className="flex items-center justify-center gap-3 p-4 bg-white rounded-2xl transition-opacity group-hover:opacity-25">
+                {/* eslint-disable-next-line @next/next/no-img-element */}
+                <img src="/badges/app-store.svg" alt="Download on the App Store" className="h-10 w-auto" />
+                {/* eslint-disable-next-line @next/next/no-img-element */}
+                <img src="/badges/google-play.svg" alt="Get it on Google Play" className="h-10 w-auto" />
+            </div>
+            <span className="absolute inset-0 flex items-center justify-center text-xs font-bold uppercase tracking-widest text-obsidian opacity-0 group-hover:opacity-100 transition-opacity pointer-events-none">
+                Coming soon
+            </span>
+        </div>
+    );
+}
+
 function ComingSoonButton({
     label,
-    sub,
     variant = 'solid',
 }: {
     label: string;
-    sub?: string;
     variant?: 'solid' | 'outline';
 }) {
     const base =
@@ -60,19 +86,14 @@ function ComingSoonButton({
             : 'border border-white/15 text-white group-hover:bg-white/5';
 
     return (
-        <div className="group relative flex-1">
+        <div className="group relative">
             <button
                 type="button"
                 aria-disabled="true"
                 aria-label={`${label} — coming soon`}
                 className={`w-full flex items-center justify-center px-6 py-3.5 rounded-xl cursor-default transition-colors ${base}`}
             >
-                <span className="text-center leading-tight group-hover:opacity-0 transition-opacity">
-                    {sub && (
-                        <span className="block text-[9px] uppercase tracking-widest opacity-50">{sub}</span>
-                    )}
-                    <span className="block text-sm font-bold">{label}</span>
-                </span>
+                <span className="text-sm font-bold group-hover:opacity-0 transition-opacity">{label}</span>
             </button>
             <span className="absolute inset-0 flex items-center justify-center text-[11px] font-bold uppercase tracking-widest opacity-0 group-hover:opacity-100 transition-opacity pointer-events-none">
                 Coming soon
@@ -209,9 +230,8 @@ export function ConsumerApp() {
                                     <p className="text-[10px] uppercase tracking-widest text-white/30 mb-3">
                                         iOS · Android · Web
                                     </p>
-                                    <div className="flex gap-3 mb-3">
-                                        <ComingSoonButton sub="Download on the" label="App Store" />
-                                        <ComingSoonButton sub="Get it on" label="Google Play" />
+                                    <div className="mb-3">
+                                        <StoreBadges />
                                     </div>
                                     <ComingSoonButton label="Join the Discord" variant="outline" />
                                     <p className="text-[11px] text-white/30 mt-3 text-center">
