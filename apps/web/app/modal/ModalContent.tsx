@@ -491,12 +491,24 @@ export function ModalContent({ initialProduct, onClose }: ModalContentProps) {
                         {/* Generation Canvas */}
                         <div className="flex-1 bg-off-white p-4 sm:p-2 flex items-center justify-center relative overflow-hidden min-h-0">
                             <div className="w-full h-full max-w-lg flex items-center justify-center">
-                                <div className="w-full relative bg-white rounded-3xl shadow-2xl overflow-hidden group aspect-[3/4] max-h-full">
+                                {/* The 3:4 frame is for the empty upload prompt, which needs a
+                                    shape to be. Once there is a picture the card takes the
+                                    picture's shape: forcing a portrait photo into 3:4 and
+                                    filling the remainder with white put bars down the sides of
+                                    the shopper's own photo, which reads as the product having
+                                    mangled it. */}
+                                <div
+                                    className={`relative shadow-2xl rounded-3xl group max-h-full ${
+                                        result || image
+                                            ? 'inline-flex overflow-hidden'
+                                            : 'w-full bg-white overflow-hidden aspect-[3/4]'
+                                    }`}
+                                >
                                     {result ? (
-                                        <div className="w-full h-full relative">
+                                        <div className="relative flex max-h-full">
                                             {/* contain, not cover: a try-on result is a full-body image and
                                                 cropping it cuts off the garment being judged. */}
-                                            <img src={result} className="w-full h-full object-contain" alt="Generation result" />
+                                            <img src={result} className="block max-h-full max-w-full w-auto h-auto" alt="Generation result" />
                                             <div className="absolute top-4 left-4 flex gap-2">
                                                 <button
                                                     onClick={() => setResult(null)}
@@ -511,8 +523,8 @@ export function ModalContent({ initialProduct, onClose }: ModalContentProps) {
                                             </div>
                                         </div>
                                     ) : image ? (
-                                        <div className="w-full h-full relative">
-                                            <img src={image} className="w-full h-full object-contain" alt="User upload" />
+                                        <div className="relative flex max-h-full">
+                                            <img src={image} className="block max-h-full max-w-full w-auto h-auto" alt="User upload" />
                                             {!generating && !converting && (
                                                 <div className="absolute top-4 right-4 opacity-0 group-hover:opacity-100 transition-opacity">
                                                     <label className="bg-white/90 backdrop-blur-sm text-black px-5 py-2.5 rounded-full text-[10px] font-black tracking-widest uppercase cursor-pointer shadow-xl hover:scale-105 active:scale-95 transition-all border border-black/5 flex items-center gap-2">
