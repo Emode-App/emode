@@ -482,7 +482,9 @@ export function ModalContent({ initialProduct, onClose }: ModalContentProps) {
                                 <div className="w-full relative bg-white rounded-3xl shadow-2xl overflow-hidden group aspect-[3/4] max-h-full">
                                     {result ? (
                                         <div className="w-full h-full relative">
-                                            <img src={result} className="w-full h-full object-cover" alt="Generation result" />
+                                            {/* contain, not cover: a try-on result is a full-body image and
+                                                cropping it cuts off the garment being judged. */}
+                                            <img src={result} className="w-full h-full object-contain" alt="Generation result" />
                                             <div className="absolute top-4 left-4 flex gap-2">
                                                 <button
                                                     onClick={() => setResult(null)}
@@ -498,7 +500,7 @@ export function ModalContent({ initialProduct, onClose }: ModalContentProps) {
                                         </div>
                                     ) : image ? (
                                         <div className="w-full h-full relative">
-                                            <img src={image} className="w-full h-full object-cover" alt="User upload" />
+                                            <img src={image} className="w-full h-full object-contain" alt="User upload" />
                                             {!generating && !converting && (
                                                 <div className="absolute top-4 right-4 opacity-0 group-hover:opacity-100 transition-opacity">
                                                     <label className="bg-white/90 backdrop-blur-sm text-black px-5 py-2.5 rounded-full text-[10px] font-black tracking-widest uppercase cursor-pointer shadow-xl hover:scale-105 active:scale-95 transition-all border border-black/5 flex items-center gap-2">
@@ -592,7 +594,7 @@ export function ModalContent({ initialProduct, onClose }: ModalContentProps) {
                                 <div>
                                     <span className="text-[10px] uppercase tracking-[0.2em] font-bold text-accent-gold mb-3 block">Viewing Product</span>
                                     <div className="flex gap-4 items-center mb-6">
-                                        <div className="w-20 h-24 rounded-lg bg-off-white overflow-hidden shadow-sm">
+                                        <div className="w-24 h-32 rounded-lg bg-white border border-black/5 overflow-hidden shadow-sm shrink-0 p-1">
                                             <img src={product.image} className="w-full h-full object-contain" alt={product.title} />
                                         </div>
                                         <div>

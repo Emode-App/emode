@@ -535,6 +535,9 @@ function extractFromContainer(container, img) {
     }
 
     title = cleanTitle(title);
+    // Shared cleaner as well: cleanTitle strips known junk phrases, this removes
+    // a trailing "| STORE" that og:title carries on essentially every site.
+    if (detectApiForTitle()) title = detectApiForTitle().cleanProductTitle(title);
 
     console.log('Final Choice:', { title, price });
     console.groupEnd();
@@ -543,6 +546,10 @@ function extractFromContainer(container, img) {
 }
 
 
+
+function detectApiForTitle() {
+    return (typeof window !== 'undefined' && window.emodeDetect) || null;
+}
 
 function cleanTitle(title) {
     if (!title) return 'Unknown Product';
@@ -655,6 +662,9 @@ function extractProductContext() {
     }
 
     title = cleanTitle(title);
+    // Same shared cleaner as the catalog path: og:title and document.title both
+    // carry a trailing "| STORE" on essentially every storefront.
+    if (detectApiForTitle()) title = detectApiForTitle().cleanProductTitle(title);
 
     // 3. Find the main product image.
     //
@@ -772,7 +782,23 @@ function injectButtons() {
     }
 
     lastScannedUrl = window.location.href;
-    if (document.querySelector('.emode-extension-injected')) return;
+
+    const alreadyThere = document.querySelector('.emode-extension-injected');
+    if (alreadyThere) {
+        // Re-anchor if a real buy control has since appeared.
+        //
+        // A luxury PDP renders its heading immediately and its buy control after
+        // the size/variant data loads, so an early scan legitimately finds only
+        // the heading. Without this the buttons stay stranded next to the title
+        // — which on Gucci is the whole other side of the page from "Select
+        // size" — for as long as the shopper is there.
+        const cartNow = detectApi && detectApi.findCartButton();
+        if (cartNow && alreadyThere.dataset.emodeAnchor === 'heading' && cartNow.parentNode) {
+            alreadyThere.remove();
+        } else {
+            return;
+        }
+    }
 
     // Placement comes from detect.js, the same module that decided this IS a
     // product page. These were separate before: detection was rewritten to use
@@ -790,22 +816,31 @@ function injectButtons() {
 
     const btnGroup = document.createElement('div');
     btnGroup.className = 'emode-extension-injected';
+    // Remembered so a later scan knows whether this placement was a fallback.
+    btnGroup.dataset.emodeAnchor = anchor.position === 'after' ? 'heading' : 'cart';
+    // Sit where it was put. This used to carry order:-1 plus width and
+    // flex-basis of 100%, and rewrote the parent's flex-wrap — a set of hacks
+    // meant to force the buttons to the top of whatever container they landed
+    // in. On Gucci that yanked them out of the buy column into the top of the
+    // page's flex row, pushed the product title sideways until it overlapped,
+    // and left the buttons stranded above the price with the real buy control
+    // still across the page. Fighting a storefront's layout cannot be won in
+    // general; matching the anchor's own width can.
     Object.assign(btnGroup.style, {
         display: 'flex',
         gap: '10px',
-        margin: '12px 0 20px 0',
-        width: '100%',
-        flexBasis: '100%',
-        minHeight: '52px',
-        order: '-1' // Try to jump to top in flex containers
+        margin: '12px 0',
+        boxSizing: 'border-box',
     });
 
-    // Ensure parent allows wrapping if it's a flex container
-    if (targetBtn.parentNode) {
-        const parentStyle = window.getComputedStyle(targetBtn.parentNode);
-        if (parentStyle.display === 'flex') {
-            targetBtn.parentNode.style.flexWrap = 'wrap';
-        }
+    // Match the control we are sitting next to, so the buttons read as part of
+    // the page rather than as something bolted on.
+    const anchorRect = targetBtn.getBoundingClientRect();
+    if (anchorRect.width > 80) {
+        btnGroup.style.width = `${Math.round(anchorRect.width)}px`;
+        btnGroup.style.maxWidth = '100%';
+    } else {
+        btnGroup.style.width = '100%';
     }
 
     const tryBtn = document.createElement('button');

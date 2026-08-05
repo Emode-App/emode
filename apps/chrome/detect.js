@@ -26,6 +26,36 @@
 (function (global) {
     'use strict';
 
+    /**
+     * Strip the store's own name off a title.
+     *
+     * og:title is written for a browser tab and a link preview, so it routinely
+     * ends "<product> | <STORE>" — which arrived intact in the try-on panel as
+     * "Froissé nylon faille zip jacket with embroidery in beige | GUCCI® US".
+     * Only the trailing segment is removed, and only when it plausibly names
+     * this site, so a product genuinely called "Something | Something" survives.
+     */
+    function cleanProductTitle(raw) {
+        if (!raw) return raw;
+        let title = String(raw).trim();
+
+        const siteName = (document.querySelector('meta[property="og:site_name"]') || {}).content || '';
+        const host = window.location.hostname.replace(/^www\./, '').split('.')[0];
+        const normalise = (v) => v.toLowerCase().replace(/[^a-z0-9]/g, '');
+        const brands = [normalise(siteName), normalise(host)].filter((b) => b.length > 2);
+
+        const parts = title.split(/\s+[|–—·-]\s+/);
+        while (parts.length > 1) {
+            const tail = normalise(parts[parts.length - 1]);
+            const isSite = brands.some((b) => tail.includes(b) || b.includes(tail));
+            if (!isSite) break;
+            parts.pop();
+        }
+
+        title = parts.join(' | ').trim();
+        return title || String(raw).trim();
+    }
+
     function absoluteUrl(src) {
         if (!src) return '';
         try {
@@ -71,7 +101,7 @@
 
                 if (node.name && imageUrl && looksLikeProductImage(String(imageUrl))) {
                     return {
-                        title: String(node.name).trim(),
+                        title: cleanProductTitle(node.name),
                         image: absoluteUrl(String(imageUrl)),
                         price: price != null ? `${currency ? currency + ' ' : ''}${price}` : undefined,
                         productId: node.productID ? String(node.productID)
@@ -120,7 +150,7 @@
         if (!isProductType && !amount && !findCartButton()) return null;
 
         return {
-            title: title.trim(),
+            title: cleanProductTitle(title),
             image: absoluteUrl(image),
             price: amount ? `${currency ? currency + ' ' : ''}${amount}` : undefined,
             url: window.location.href,
@@ -226,7 +256,7 @@
         }
 
         if (!title || !image) return null;
-        return { title, image: absoluteUrl(image), price, url: window.location.href, source: 'dom' };
+        return { title: cleanProductTitle(title), image: absoluteUrl(image), price, url: window.location.href, source: 'dom' };
     }
 
     /**
@@ -280,6 +310,7 @@
     }
 
     global.emodeDetect = {
+        cleanProductTitle,
         findAnchor,
         isUsableControl,
         detectProduct,
