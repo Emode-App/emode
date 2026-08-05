@@ -8,6 +8,8 @@ import { Sparkles, Zap, Shield, Globe, Check, X, ArrowRight, ShoppingCart, Plus 
 import { useState, useEffect } from 'react';
 import { supabase } from '../lib/supabase/browser';
 import { ConsumerApp } from '../components/ConsumerApp';
+import { Enterprise } from '../components/Enterprise';
+import { FAQ } from '../components/FAQ';
 
 export default function Home() {
     const [billingCycle, setBillingCycle] = useState<'monthly' | 'lifetime'>('monthly');
@@ -298,6 +300,13 @@ export default function Home() {
                     </div>
                 </div>
             </section>
+
+            {/* Enterprise sits with pricing: it is the plan for people the cards
+                above do not fit, and it belongs where they are already comparing. */}
+            <Enterprise />
+
+            {/* Objections answered before the pitch for a different product. */}
+            <FAQ />
 
             {/* After pricing: a brand reading this page came to install try-on,
                 and should reach the plans before being told about an app they

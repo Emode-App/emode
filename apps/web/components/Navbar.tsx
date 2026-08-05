@@ -47,6 +47,7 @@ export const Navbar = () => {
                 {/* Center: Navigation Links - Absolutely Centered */}
                 <div className="absolute inset-0 hidden md:flex items-center justify-center pointer-events-none">
                     <div className="flex items-center gap-8 font-medium pointer-events-auto">
+                        <Link href="/how-it-works" className="hover:text-accent-gold transition-colors">How it works</Link>
                         <Link href="/marketplace" className="hover:text-accent-gold transition-colors">Marketplace</Link>
                         <Link href="/#extensions" className="hover:text-accent-gold transition-colors">Extensions</Link>
                         <Link href="/#pricing" className="hover:text-accent-gold transition-colors">Pricing</Link>
