@@ -56,8 +56,11 @@ export function FAQ() {
     // all-expanded is a wall of text.
     const [open, setOpen] = useState<number | null>(0);
 
+    // pt trimmed rather than py: pricing above ends with py-24 on the same
+    // off-white, so equal padding on both sides read as one 192px void with
+    // nothing in it to explain the gap.
     return (
-        <section id="faq" className="py-24 bg-off-white">
+        <section id="faq" className="pt-8 pb-24 bg-off-white">
             <div className="max-w-3xl mx-auto px-6">
                 <h2 className="text-4xl md:text-5xl font-heading font-bold tracking-tighter mb-4">
                     Questions
