@@ -109,7 +109,7 @@ export function RealtimeAnalytics({ initialData, merchantId }: { initialData: Us
                     <p className="text-5xl font-heading font-bold tracking-tighter relative z-10 text-obsidian">
                         {totalGenerationsInPeriod.toLocaleString()}
                     </p>
-                    <p className="text-sm text-charcoal/50 mt-1 relative z-10 font-medium">Platform try-ons generated</p>
+                    <p className="text-sm text-charcoal/50 mt-1 relative z-10 font-medium">{merchantId ? "Your try-ons" : "Platform try-ons generated"}</p>
                 </div>
             </div>
 
