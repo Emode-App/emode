@@ -19,16 +19,40 @@ export type StudioAsset = {
 };
 
 /**
+ * One-click starting points for the model description.
+ *
+ * They fill the text field rather than replacing it, so they stay a shortcut
+ * instead of a cage — a merchant can click the nearest one and then edit. That
+ * also teaches what a useful description looks like, which a dropdown never
+ * does.
+ *
+ * Deliberately not gated behind a higher plan. Presets are the EASIER path;
+ * charging for the shortcut while leaving typing free would mean the cheaper
+ * plan has more control, not less, and the merchant most likely to want a chip
+ * to click is the least likely to pay extra for one.
+ *
+ * The list is a starting set and openly incomplete — which is the honest state
+ * of any such list, and why the field underneath stays free text.
+ */
+const MODEL_PRESETS = [
+    'a woman in her 20s, straight size',
+    'a woman in her 30s, size 14',
+    'a woman in her 50s, size 8',
+    'a man in his 20s, slim build',
+    'a man in his 30s, broad build',
+    'a man in his 60s, average build',
+    'a tall, androgynous adult',
+    'a plus-size adult, size 20',
+    'a petite adult, under 5ft 3',
+    'a wheelchair user, seated',
+];
+
+/**
  * Studio — generate a model wearing one of your own products.
  *
  * The product is picked from the merchant's own catalogue rather than uploaded,
- * because emode already has their products and asking them to re-upload an image
- * it is holding would be silly.
- *
- * Model description is free text with suggestions rather than a fixed list.
- * Any list of body types and skin tones is a list of the ones we thought to
- * include, which on a product about seeing clothes on bodies like yours is the
- * wrong shape of control.
+ * because emode already holds their product images and asking them to re-upload
+ * one would be silly.
  */
 export function StudioClient({
     products,
@@ -147,12 +171,40 @@ export function StudioClient({
                     <input
                         value={model}
                         onChange={(e) => setModel(e.target.value)}
-                        placeholder="e.g. a woman in her 30s, size 14"
-                        className="w-full bg-off-white border border-black/10 rounded-xl py-3 px-4 text-sm mb-2 focus:outline-none focus:border-accent-gold transition-colors"
+                        placeholder="Describe them, or pick a starting point below"
+                        className="w-full bg-off-white border border-black/10 rounded-xl py-3 px-4 text-sm mb-3 focus:outline-none focus:border-accent-gold transition-colors"
                     />
+
+                    <div className="flex flex-wrap gap-1.5 mb-3">
+                        {MODEL_PRESETS.map((preset) => (
+                            <button
+                                key={preset}
+                                type="button"
+                                onClick={() => setModel(preset)}
+                                className={`px-2.5 py-1 rounded-full text-[11px] border transition-colors ${
+                                    model === preset
+                                        ? 'bg-obsidian text-white border-obsidian'
+                                        : 'bg-white border-black/10 text-charcoal/60 hover:border-black/30'
+                                }`}
+                            >
+                                {preset}
+                            </button>
+                        ))}
+                        {model && (
+                            <button
+                                type="button"
+                                onClick={() => setModel('')}
+                                className="px-2.5 py-1 rounded-full text-[11px] text-charcoal/40 hover:text-charcoal underline"
+                            >
+                                clear
+                            </button>
+                        )}
+                    </div>
+
                     <p className="text-[11px] text-charcoal/40 mb-6 leading-relaxed">
-                        Describe whoever your customer is. Leave it blank and we won&apos;t
-                        choose for you beyond &ldquo;an adult&rdquo;.
+                        Pick one and edit it, or write your own — describe whoever your
+                        customer actually is. Blank means we won&apos;t choose for you beyond
+                        &ldquo;an adult&rdquo;.
                     </p>
 
                     <label className="block text-xs font-bold uppercase tracking-widest text-charcoal/40 mb-2 flex items-center gap-2">
