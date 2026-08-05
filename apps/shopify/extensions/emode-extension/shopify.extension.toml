@@ -1,6 +1,0 @@
-api_version = "2024-07"
-name = "emodeAI Buttons"
-type = "theme_app_extension"
-
-[build]
-liquid_only = true

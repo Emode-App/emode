@@ -4,7 +4,8 @@
     "private": true,
     "scripts": {
         "build": "vite build",
-        "dev": "vite"
+        "dev": "vite",
+        "lint": "eslint ."
     },
     "devDependencies": {
         "vite": "latest",
