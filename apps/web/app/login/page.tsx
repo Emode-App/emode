@@ -4,6 +4,7 @@ import { useState, useEffect } from 'react';
 import { supabase } from '../../lib/supabase/browser';
 import { Mail, ArrowRight, Sparkles } from 'lucide-react';
 import Link from 'next/link';
+import { Logo } from '../../components/Logo';
 
 /**
  * Supabase's auth errors are written for the developer integrating it, not for
@@ -158,9 +159,7 @@ export default function LoginPage() {
             <div className="w-full max-w-md">
                 <div className="text-center mb-10">
                     <Link href="/" className="inline-block mb-6">
-                        <span className="text-4xl font-heading font-bold bg-purple-gradient bg-clip-text text-transparent italic pr-4">
-                            emodeAI
-                        </span>
+                        <Logo imgClassName="h-16 mx-auto" className="text-4xl" />
                     </Link>
                     <h1 className="text-3xl font-heading font-bold tracking-tight mb-3">Welcome to your Closet</h1>
                     <p className="text-charcoal/50">Enter your email to sign in or create an account.</p>

@@ -5,6 +5,7 @@ import { redirect } from 'next/navigation';
 import { LayoutDashboard, Package, Users, BarChart3, Settings, LogOut, Code2 } from 'lucide-react';
 import { SignOutButton } from './components/SignOutButton';
 import { AdminNav, AdminSettingsLink } from './components/AdminNav';
+import { Logo } from '../../components/Logo';
 
 export const dynamic = 'force-dynamic';
 
@@ -36,7 +37,12 @@ export default async function AdminLayout({
         <div className="min-h-screen bg-off-white flex">
             {/* Premium Sidebar */}
             <aside className="w-64 bg-obsidian text-white p-8 flex flex-col gap-8 fixed h-full z-20">
-                <div className="text-2xl font-heading font-bold italic mb-4 text-center pr-4">emodeAdmin</div>
+                {/* Mark only: the sidebar is 256px wide and dark, so the full
+                    lockup would be illegible at the size that fits. */}
+                <div className="mb-4 flex flex-col items-center gap-2">
+                    <Logo variant="mark" imgClassName="h-10 invert" />
+                    <span className="text-[10px] uppercase tracking-[0.25em] text-white/40">Admin</span>
+                </div>
                 <nav className="flex flex-col gap-2">
                     <AdminNav />
 

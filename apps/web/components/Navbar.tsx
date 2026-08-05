@@ -5,6 +5,7 @@ import { useEffect, useState } from 'react';
 import { ShoppingBag, LayoutDashboard } from 'lucide-react';
 import { usePathname, useRouter } from 'next/navigation';
 import { supabase } from '../lib/supabase/browser';
+import { Logo } from './Logo';
 
 export const Navbar = () => {
     const pathname = usePathname();
@@ -39,9 +40,7 @@ export const Navbar = () => {
                 {/* Left: Logo */}
                 <div className="flex items-center z-10">
                     <Link href="/">
-                        <span className="text-2xl font-heading font-bold bg-purple-gradient bg-clip-text text-transparent italic pr-4 hover:opacity-80 transition-opacity cursor-pointer block">
-                            emodeAI
-                        </span>
+                        <Logo className="hover:opacity-80 transition-opacity cursor-pointer" imgClassName="h-9" />
                     </Link>
                 </div>
 

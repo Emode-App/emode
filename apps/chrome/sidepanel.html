@@ -50,6 +50,10 @@
       margin-bottom: 8px;
     }
 
+    /* Italic glyphs overhang their box and background-clip:text clips at that
+       box, so the tail of the last letter was sliced off. inline-block plus a
+       little trailing room lets the glyph finish. The web app padded with pr-4
+       instead, which hides it by shoving the whole mark off-centre. */
     .logo {
       font-family: 'Outfit', sans-serif;
       font-size: 1.5rem;
@@ -59,6 +63,20 @@
       -webkit-background-clip: text;
       -webkit-text-fill-color: transparent;
       letter-spacing: -0.02em;
+      display: inline-block;
+      padding-right: 0.12em;
+      overflow: visible;
+    }
+
+    .logo-img { height: 28px; width: auto; display: block; }
+
+    /* Local initial rather than a remote avatar service. */
+    .avatar {
+      width: 32px; height: 32px; border-radius: 50%;
+      background: var(--purple-gradient);
+      color: #fff; font-weight: 700; font-size: 0.75rem;
+      display: flex; align-items: center; justify-content: center;
+      flex-shrink: 0;
     }
 
     .glass-card {
@@ -247,10 +265,14 @@
 
 <body style="padding: 24px;">
   <header>
-    <div class="logo">emodeAI</div>
-    <div style="width: 32px; height: 32px; border-radius: 50%; background: #eee; overflow: hidden;">
-      <img src="https://ui-avatars.com/api/?name=User&background=6366f1&color=fff" style="width: 100%; height: 100%;" />
-    </div>
+    <!-- Swaps to the brand mark once icons/emode-mark.png exists; the wordmark
+         stays as the fallback so the panel never shows a broken image. -->
+    <img class="logo-img" src="icons/emode-mark.png" alt="emode"
+         onerror="this.outerHTML='&lt;div class=&quot;logo&quot;&gt;emode&lt;/div&gt;'">
+    <!-- Was an <img> from ui-avatars.com: a request to a third party every time
+         the panel opened, on a surface that knows what the user is shopping for,
+         and a broken circle whenever they are offline. -->
+    <div class="avatar" id="user-initial">US</div>
   </header>
 
   <div class="glass-card usage-section" style="margin-top: 24px; margin-bottom: 32px;">
