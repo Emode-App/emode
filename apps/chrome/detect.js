@@ -200,7 +200,17 @@
     function isPinned(el) {
         for (let node = el; node && node !== document.body; node = node.parentElement) {
             const position = window.getComputedStyle(node).position;
-            if (position === 'fixed' || position === 'sticky') return true;
+            if (position !== 'fixed' && position !== 'sticky') continue;
+
+            // Being pinned is not itself disqualifying — a quick-view dialog is
+            // position:fixed and its buy button is the realest control on the
+            // page. What marks chrome is being a strip: headers and sticky
+            // add-to-cart bars hug an edge and are shallow, while a dialog
+            // occupies the middle of the window.
+            const r = node.getBoundingClientRect();
+            const isStrip =
+                r.height < window.innerHeight * 0.25 || r.width < window.innerWidth * 0.25;
+            if (isStrip) return true;
         }
         return false;
     }
@@ -298,6 +308,80 @@
 
     const PRICE_RE = /(?:[$£€¥]|USD|EUR|GBP)\s?\d[\d.,]*/;
 
+    /**
+     * Read a product out of one region of the page.
+     *
+     * Headings are ranked by nearness to the price rather than by document
+     * order. An overlay's first heading is often the brand or a breadcrumb, and
+     * its later ones are section labels — which is how Lyst's dialog produced
+     * "Size & fit" as a product name. The name sits beside the price, because
+     * that is how people read a product.
+     */
+    // Headings that label a section rather than name a product.
+    const SECTION_LABEL_RE =
+        /^(size|fit|size ?& ?fit|description|details|delivery|shipping|returns?|reviews?|care|composition|about|more|similar|you may also like|related)/i;
+
+    function fromScope(scope) {
+        // Anchor on the price. Everything a shopper needs to identify what they
+        // are looking at is printed immediately above it.
+        let priceEl = null;
+        let price;
+        for (const el of Array.from(scope.querySelectorAll('h1, h2, h3, h4, span, div, p, b, strong'))) {
+            if (el.children.length) continue;
+            const match = (el.textContent || '').match(PRICE_RE);
+            if (match && el.offsetParent !== null) { priceEl = el; price = match[0]; break; }
+        }
+
+        let title = '';
+
+        if (priceEl) {
+            const priceTop = priceEl.getBoundingClientRect().top;
+
+            // Lines printed above the price, nearest last. Not only headings:
+            // aggregators mark the brand as a heading and the product name as a
+            // paragraph, so a headings-only rule skipped the actual name and
+            // reached down for a section label instead — which is how a dress
+            // came through titled "Cara Cara Size & fit".
+            const above = Array.from(scope.querySelectorAll('h1, h2, h3, h4, p, span, div, a'))
+                .filter((el) => {
+                    if (el.children.length) return false;
+                    if (el === priceEl || el.offsetParent === null) return false;
+
+                    const text = (el.textContent || '').trim();
+                    if (text.length < 3 || text.length > 120) return false;
+                    if (PRICE_RE.test(text)) return false;
+                    if (SECTION_LABEL_RE.test(text)) return false;
+
+                    const gap = priceTop - el.getBoundingClientRect().top;
+                    return gap > 0 && gap < 220;
+                })
+                .map((el) => (el.textContent || '').trim());
+
+            // Brand on one line, product name on the next, is the usual shape.
+            const unique = [...new Set(above)];
+            title = unique.slice(-2).join(' ').trim();
+        }
+
+        if (!title) {
+            const heading = Array.from(scope.querySelectorAll('h1, h2, h3'))
+                .find((h) => h.offsetParent !== null
+                    && (h.textContent || '').trim().length > 2
+                    && !SECTION_LABEL_RE.test((h.textContent || '').trim()));
+            title = heading ? (heading.textContent || '').trim() : '';
+        }
+
+        const image = largestImage(scope);
+        if (!title || !image) return null;
+
+        return {
+            title: cleanProductTitle(title),
+            image: absoluteUrl(image),
+            price,
+            url: window.location.href,
+            source: 'overlay',
+        };
+    }
+
     /** Tier 3: DOM heuristics, anchored on the buy control. */
     function fromDom() {
         const cart = findCartButton();
@@ -332,6 +416,52 @@
     }
 
     /**
+     * An open quick-view / modal, if one is covering the page.
+     *
+     * Aggregators like Lyst show a product in a dialog on top of whatever the
+     * shopper was already looking at. Detection reading the document then answers
+     * about the wrong thing entirely: on Lyst it returned a title of "Size & fit"
+     * — a section heading inside the dialog — illustrated with the magazine photo
+     * from the page underneath, for a dress that was right there on screen.
+     *
+     * Structured data is worse than useless in this state. JSON-LD is emitted for
+     * the underlying page and does not change when a dialog opens, so it
+     * confidently describes something the shopper is not looking at. Inside an
+     * overlay the DOM is the only honest source.
+     */
+    function findOverlay() {
+        const candidates = Array.from(document.querySelectorAll(
+            '[role="dialog"], [aria-modal="true"], dialog[open], [class*="modal"], [class*="quickview"], [class*="quick-view"]'
+        ));
+
+        let best = null;
+        let bestArea = 0;
+
+        for (const el of candidates) {
+            if (el.offsetParent === null && window.getComputedStyle(el).position !== 'fixed') continue;
+
+            const style = window.getComputedStyle(el);
+            if (style.visibility === 'hidden' || style.opacity === '0' || style.display === 'none') continue;
+
+            const r = el.getBoundingClientRect();
+            // Must actually cover a meaningful part of the window. Plenty of
+            // markup is called "modal" while sitting collapsed and empty.
+            const area = r.width * r.height;
+            if (area < window.innerWidth * window.innerHeight * 0.2) continue;
+
+            // And must contain something to buy — otherwise it is a newsletter
+            // prompt, a cookie banner, or a size guide.
+            const hasHeading = el.querySelector('h1, h2, h3');
+            const hasPrice = PRICE_RE.test(el.textContent || '');
+            if (!hasHeading || !hasPrice) continue;
+
+            if (area > bestArea) { best = el; bestArea = area; }
+        }
+
+        return best;
+    }
+
+    /**
      * Best available product context, or null if this is not a product page.
      *
      * JSON-LD wins on identity but not always on imagery: a store's featured
@@ -341,13 +471,18 @@
      * shopper is actually looking at.
      */
     function detectProduct() {
-        const context = fromJsonLd() || fromOpenGraph() || fromDom();
+        // A quick-view dialog wins over everything the page says about itself.
+        const overlay = findOverlay();
+        const context = overlay
+            ? fromScope(overlay)
+            : (fromJsonLd() || fromOpenGraph() || fromDom());
         if (!context) return null;
 
-        context.alternateImages = imageCandidates(document).map((c) => c.src).slice(0, 8);
+        const imageScope = overlay || document;
+        context.alternateImages = imageCandidates(imageScope).map((c) => c.src).slice(0, 8);
 
-        if (context.source !== 'dom') {
-            const onPage = imageCandidates(document)[0];
+        if (context.source !== 'dom' && context.source !== 'overlay') {
+            const onPage = imageCandidates(imageScope)[0];
             if (onPage && onPage.area > 90000 && onPage.src !== context.image) {
                 context.metadataImage = context.image;
                 context.image = onPage.src;
@@ -382,6 +517,8 @@
     }
 
     global.emodeDetect = {
+        findOverlay,
+        fromScope,
         onScreenArea,
         isPinned,
         cleanProductTitle,

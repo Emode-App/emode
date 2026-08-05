@@ -31,6 +31,26 @@ function isEmodeApp() {
         window.location.pathname.startsWith('/modal');
 }
 
+/**
+ * Answer the side panel when it asks what is on this page.
+ *
+ * The panel only ever learned about a product by being pushed one, and the push
+ * happens while injecting buttons — during page load. Opening the panel on a page
+ * you are already looking at, which is how anyone actually uses it, meant nothing
+ * had been sent since and it sat on "Detecting..." indefinitely. It needed to be
+ * able to ask.
+ */
+chrome.runtime?.onMessage?.addListener((message, sender, sendResponse) => {
+    if (message?.type !== 'REQUEST_PRODUCT') return;
+    try {
+        sendResponse({ product: isPDP() ? extractProductContext() : null });
+    } catch (err) {
+        console.warn('[emodeAI] Could not answer product request:', err);
+        sendResponse({ product: null });
+    }
+    return true;
+});
+
 // Relay detected product context to the side panel (best-effort; side panel may not be open)
 function notifyProductDetected(context) {
     if (!context) return;

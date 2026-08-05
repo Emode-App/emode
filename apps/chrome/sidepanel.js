@@ -25,6 +25,55 @@ const usageProgress = document.getElementById('usage-progress');
 const usageCount = document.getElementById('usage-count');
 const upgradeSection = document.getElementById('upgrade-section');
 
+/**
+ * Product titles come from arbitrary websites and were being interpolated
+ * straight into innerHTML in here. This document holds the user's access token
+ * in chrome.storage and can call the extension APIs, so a product named
+ * `<img src=x onerror=...>` on any store in the world would have run script in
+ * that context. Everything from a page goes through this now.
+ */
+function escapeHtml(value) {
+    return String(value == null ? '' : value)
+        .replace(/&/g, '&amp;')
+        .replace(/</g, '&lt;')
+        .replace(/>/g, '&gt;')
+        .replace(/"/g, '&quot;')
+        .replace(/'/g, '&#39;');
+}
+
+/**
+ * Ask the page what it is showing.
+ *
+ * The panel used to wait to be told, and the telling happens during page load —
+ * so opening the panel on a page already loaded left it on "Detecting..."
+ * forever, and switching tabs left it describing the previous one.
+ */
+async function refreshActiveProduct() {
+    try {
+        const [tab] = await chrome.tabs.query({ active: true, currentWindow: true });
+        if (!tab?.id) return;
+
+        const response = await chrome.tabs.sendMessage(tab.id, { type: 'REQUEST_PRODUCT' });
+        if (response?.product) {
+            updateActiveProduct({ ...response.product, url: tab.url });
+        } else {
+            showNoProduct();
+        }
+    } catch {
+        // No content script in this tab — chrome:// pages, the web store, a tab
+        // opened before the extension was installed. Not an error worth showing.
+        showNoProduct();
+    }
+}
+
+function showNoProduct() {
+    activeProduct = { title: 'No product on this page', image: '', price: '' };
+    if (productTitle) productTitle.textContent = activeProduct.title;
+    if (productPrice) productPrice.textContent = 'Open a product page to try something on';
+    if (productImg) productImg.removeAttribute('src');
+    if (tryOnBtn) tryOnBtn.disabled = true;
+}
+
 async function getAuthToken() {
     const { emode_access_token, emode_user_id } = await chrome.storage.local.get(['emode_access_token', 'emode_user_id']);
     return { token: emode_access_token || null, userId: emode_user_id || null };
@@ -48,6 +97,7 @@ function updateActiveProduct(product) {
     if (productImg && activeProduct.image) productImg.src = activeProduct.image;
     if (productTitle) productTitle.textContent = activeProduct.title;
     if (productPrice) productPrice.textContent = activeProduct.price || 'Detected on page';
+    if (tryOnBtn) tryOnBtn.disabled = false;
 
     const card = document.querySelector('.active-product-card');
     if (card) {
@@ -127,13 +177,13 @@ function renderWardrobe(items) {
 
         div.innerHTML = `
             <div style="height: 120px; overflow: hidden; position: relative; border-radius: 12px 12px 0 0;">
-                <img src="${item.image}" style="width: 100%; height: 100%; object-fit: cover;" />
+                <img src="${escapeHtml(item.image)}" style="width: 100%; height: 100%; object-fit: contain;" />
             </div>
             <div style="padding: 8px; display: flex; flex-direction: column; gap: 4px; flex: 1;">
                 <h5 style="font-size: 0.7rem; font-weight: 700; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; margin: 0; line-height: 1.1;">
-                    ${item.title}
+                    ${escapeHtml(item.title)}
                 </h5>
-                <p style="font-size: 0.65rem; color: #666; font-weight: 600;">${item.price}</p>
+                <p style="font-size: 0.65rem; color: #666; font-weight: 600;">${escapeHtml(item.price)}</p>
                 <button class="btn-buy" style="margin-top: auto; width: 100%; background: #111; color: white; border: none; padding: 6px; border-radius: 6px; font-size: 9px; font-weight: 700; cursor: pointer; display: flex; align-items: center; justify-content: center; gap: 4px;">
                     BUY NOW
                 </button>
@@ -180,10 +230,10 @@ function renderCart(items) {
         row.className = 'glass-card';
         row.style.cssText = 'padding:10px 12px;display:flex;align-items:center;gap:12px;background:white;';
         row.innerHTML = `
-            <img src="${item.image}" style="width:36px;height:44px;object-fit:cover;border-radius:6px;flex-shrink:0;" />
+            <img src="${escapeHtml(item.image)}" style="width:36px;height:44px;object-fit:contain;border-radius:6px;flex-shrink:0;background:#f5f5f5;" />
             <div style="flex:1;min-width:0;">
-                <p style="font-size:0.75rem;font-weight:700;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">${item.title}</p>
-                <p style="font-size:0.7rem;color:#666;">${item.price || 'Price unknown'}</p>
+                <p style="font-size:0.75rem;font-weight:700;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">${escapeHtml(item.title)}</p>
+                <p style="font-size:0.7rem;color:#666;">${escapeHtml(item.price || 'Price unknown')}</p>
             </div>
             <button class="btn-cart-buy" style="background:#111;color:white;border:none;padding:6px 10px;border-radius:6px;font-size:9px;font-weight:700;cursor:pointer;flex-shrink:0;">BUY</button>
             <button class="btn-cart-remove" style="background:none;border:none;color:rgba(0,0,0,0.3);cursor:pointer;font-size:16px;flex-shrink:0;">&times;</button>
@@ -266,8 +316,15 @@ async function init() {
     const { emode_dev_base_url } = await chrome.storage.local.get('emode_dev_base_url');
     if (emode_dev_base_url) BASE_URL = emode_dev_base_url;
 
-    await Promise.all([loadWardrobe(), loadCart(), loadUsage()]);
+    await Promise.all([refreshActiveProduct(), loadWardrobe(), loadCart(), loadUsage()]);
 }
+
+// The panel outlives any one page, so it has to follow the user: a different
+// tab, or a navigation within the same one, is a different product.
+chrome.tabs.onActivated.addListener(() => refreshActiveProduct());
+chrome.tabs.onUpdated.addListener((tabId, changeInfo, tab) => {
+    if (changeInfo.status === 'complete' && tab.active) refreshActiveProduct();
+});
 
 // Re-check auth/usage whenever the bridged token changes (e.g. user just signed in)
 chrome.storage.onChanged.addListener((changes, area) => {
