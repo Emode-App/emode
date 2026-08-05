@@ -3,6 +3,7 @@ import { headers } from 'next/headers';
 import { createSupabaseServerClient } from '../../lib/supabase/server';
 import { redirect } from 'next/navigation';
 import { LayoutDashboard, Package, Users, BarChart3, Settings, LogOut, Code2 } from 'lucide-react';
+import { SignOutButton } from './components/SignOutButton';
 
 export const dynamic = 'force-dynamic';
 
@@ -53,9 +54,12 @@ export default async function AdminLayout({
                             <Settings className="w-4 h-4" /> Settings
                         </Link>
                         {user ? (
-                            <div className="mt-2 px-4 py-2 text-xs text-white/40 truncate">
-                                {user.email}
-                            </div>
+                            <>
+                                <div className="mt-2 px-4 py-2 text-xs text-white/40 truncate">
+                                    {user.email}
+                                </div>
+                                <SignOutButton />
+                            </>
                         ) : (
                             <Link href="/login" className="flex items-center gap-3 px-4 py-3 hover:bg-white/5 rounded-lg text-sm font-medium transition-colors text-accent-gold">
                                 <LogOut className="w-4 h-4" /> Sign In
