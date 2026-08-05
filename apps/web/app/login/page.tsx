@@ -5,6 +5,28 @@ import { supabase } from '../../lib/supabase/browser';
 import { Mail, ArrowRight, Sparkles } from 'lucide-react';
 import Link from 'next/link';
 
+/**
+ * Supabase's auth errors are written for the developer integrating it, not for
+ * the person trying to sign in. The PKCE one literally instructs the reader to
+ * use @supabase/ssr on both server and client — advice a boutique owner cannot
+ * act on, in a red box, at the exact moment they are deciding whether this
+ * product works. Say what happened and what to do instead.
+ */
+function humanizeAuthError(raw: string): string {
+    if (/code verifier/i.test(raw)) {
+        return 'That link was opened in a different browser than the one that requested it. '
+            + 'Send a new link and open it in this window.';
+    }
+    if (/expired|invalid/i.test(raw)) {
+        return 'That sign-in link has expired or was already used. Send a new one.';
+    }
+    if (/rate limit/i.test(raw)) {
+        return 'Too many sign-in emails sent recently. Use "Continue with Google" above, '
+            + 'or try again in about an hour.';
+    }
+    return raw;
+}
+
 export default function LoginPage() {
     const [email, setEmail] = useState('');
     const [loading, setLoading] = useState(false);
@@ -13,7 +35,17 @@ export default function LoginPage() {
     const [awaitingLink, setAwaitingLink] = useState(false);
 
     // Already signed in — no reason to show a sign-in form.
+    //
+    // Except when a sign-in just failed. Someone can arrive here with a dead
+    // magic link for one account while holding a live session for another: the
+    // link errors, this finds the old session, and drops them into the wrong
+    // account's dashboard having shown the error for a fraction of a second.
+    // They believe they are in the account they just clicked a link for. In a
+    // product where each account is a different store, that is the kind of
+    // confusion that ends with someone editing the wrong storefront.
     useEffect(() => {
+        if (new URLSearchParams(window.location.search).get('error')) return;
+
         supabase.auth.getSession().then(({ data: { session } }) => {
             if (session) window.location.replace('/admin');
         });
@@ -50,7 +82,7 @@ export default function LoginPage() {
     useEffect(() => {
         const err = new URLSearchParams(window.location.search).get('error');
         if (err) {
-            setMessage({ type: 'error', text: err });
+            setMessage({ type: 'error', text: humanizeAuthError(err) });
             window.history.replaceState({}, '', window.location.pathname);
         }
     }, []);
