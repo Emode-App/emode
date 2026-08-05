@@ -1100,9 +1100,17 @@ document.addEventListener('mouseover', (e) => {
     if (target.tagName === 'IMG' && target.offsetWidth > 150 && target.offsetHeight > 150) {
         // Validate this is a product card
         if (!isValidProductCard(target)) {
-            // Hide pill if it was showing
+            // Same grace period as the mousemove path, and for the same reason:
+            // a card that swaps its image on hover briefly presents a node that
+            // has not been re-associated with its link yet, and hiding on that
+            // single frame is what made the pill flash and vanish.
             const trigger = document.getElementById('emode-floating-trigger');
-            if (trigger) trigger.style.display = 'none';
+            if (trigger && trigger.style.display !== 'none' && !trigger._emodeHideTimer) {
+                trigger._emodeHideTimer = setTimeout(() => {
+                    trigger._emodeHideTimer = null;
+                    trigger.style.display = 'none';
+                }, 150);
+            }
             return;
         }
 
@@ -1180,8 +1188,25 @@ document.addEventListener('mouseover', (e) => {
             document.body.appendChild(trigger);
         }
 
-        // Update trigger position and current target
+        // Anchor the hover region to the CARD, not the image.
+        //
+        // Listing pages swap the card image on hover - Gucci flips to a second
+        // shot, and plenty of stores cross-fade two stacked <img> nodes. The
+        // pill was bound to the specific <img> under the cursor, so the moment
+        // the site swapped it, e.target became a different node,
+        // target.contains(e.target) went false, and the pill vanished while the
+        // cursor had not moved at all. The card survives the swap; the image
+        // does not.
         trigger._emodeTarget = target;
+        trigger._emodeCard = target.closest('a[href]') || findProductContainer(target) || target;
+
+        // Cancel a pending hide: coming back inside the card during the grace
+        // window should keep the pill rather than let it disappear behind you.
+        if (trigger._emodeHideTimer) {
+            clearTimeout(trigger._emodeHideTimer);
+            trigger._emodeHideTimer = null;
+        }
+
         const rect = target.getBoundingClientRect();
         trigger.style.top = `${rect.top + window.scrollY + 20}px`;
         trigger.style.left = `${rect.left + window.scrollX + 20}px`;
@@ -1194,18 +1219,42 @@ document.addEventListener('scroll', () => {
     if (trigger) trigger.style.display = 'none';
 }, { passive: true });
 
-// Mouseout logic to hide trigger if not hovering target or trigger
+// Hide the pill once the cursor has actually left the card.
 document.addEventListener('mousemove', (e) => {
     const trigger = document.getElementById('emode-floating-trigger');
     if (!trigger || trigger.style.display === 'none') return;
 
-    const target = trigger._emodeTarget;
+    const card = trigger._emodeCard || trigger._emodeTarget;
     const isOverTrigger = trigger.contains(e.target);
-    const isOverTarget = target && target.contains(e.target);
+    const isOverCard = card && card.contains(e.target);
 
-    if (!isOverTrigger && !isOverTarget) {
-        // Optional: Small delay or distance check before hiding
-        trigger.style.display = 'none';
+    // Geometry as well as containment. A card that re-renders on hover can
+    // replace the very node we are holding, at which point contains() is false
+    // about an element the cursor is still sitting inside. The rectangle does
+    // not care which nodes were swapped.
+    let isInsideRect = false;
+    if (card) {
+        const r = card.getBoundingClientRect();
+        isInsideRect =
+            e.clientX >= r.left && e.clientX <= r.right &&
+            e.clientY >= r.top && e.clientY <= r.bottom;
+    }
+
+    if (isOverTrigger || isOverCard || isInsideRect) {
+        if (trigger._emodeHideTimer) {
+            clearTimeout(trigger._emodeHideTimer);
+            trigger._emodeHideTimer = null;
+        }
+        return;
+    }
+
+    // Grace period rather than an instant hide, so a card mid-re-render cannot
+    // flash the pill away between two frames.
+    if (!trigger._emodeHideTimer) {
+        trigger._emodeHideTimer = setTimeout(() => {
+            trigger._emodeHideTimer = null;
+            trigger.style.display = 'none';
+        }, 150);
     }
 });
 
