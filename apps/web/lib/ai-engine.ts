@@ -133,25 +133,16 @@ class AIEngine {
                 You are an expert fashion stylist and AI image generator.
                 Task: Virtual Try-On (VTON) for multiple items.
 
-                Input 1: A photo of a person.
-                ${productParts.map((_, i) => `Input ${i + 2}: garment ${i + 1} of ${productParts.length}.`).join('\n                ')}
+                Input 1: User's photo.
+                Inputs 2-${productParts.length + 1}: Product images of ${category}.
 
-                There are ${productParts.length} garments. ${
-                    productParts.length > 1
-                        ? `All ${productParts.length} must appear on the person in the SAME image, worn at once, as one outfit. `
-                          + `They are not alternatives and this is not a choice between them — a result showing fewer than ${productParts.length} of them is wrong. `
-                          + `Layer them the way the garments' own types dictate: outerwear over tops, tops tucked or untucked over bottoms, bottoms below the waist.`
-                        : `Put it on the person.`
-                }
-
-                Generate one photorealistic image of the person from Input 1 wearing ${productParts.length > 1 ? `all ${productParts.length} garments together` : 'the garment'}.
+                Generate a photorealistic image of the person from Input 1 wearing ALL the items from the product inputs.
 
                 Fidelity to the person:
                 - Keep their pose, body shape, face, hair, skin tone and the background exactly as in Input 1.
                 - Match the lighting of Input 1 so the garments look photographed in that same room.
 
                 Fidelity to the garment — this is what the shopper is judging:
-                - Every garment supplied must be visible in the result. Do not drop one, merge two into one, or substitute one for another.
                 - Reproduce each product exactly as pictured: colour, material, pattern, hardware, proportions and length.
                 - Reproduce its closure exactly as pictured. If the product image shows it zipped, buttoned, or fastened, it stays that way on the person. Never unzip, unbutton, or open a garment to make the shot look styled.
                 - Do not add any garment, layer or accessory that was not provided as a product input.
