@@ -89,6 +89,13 @@ export function ModalContent({ initialProduct, onClose }: ModalContentProps) {
     // ?image=, so it can already point the try-on at anything it likes.
     const [handoffImage, setHandoffImage] = useState<string | null>(null);
 
+    // Other pictures from the product page, so the shopper can correct a wrong
+    // guess. Which image on a page is the garment is not reliably decidable —
+    // galleries render the lifestyle shot and the cutout at the same size, both
+    // on screen, so every ranking rule ties. One click beats a better heuristic.
+    const [imageOptions, setImageOptions] = useState<string[]>([]);
+    const [chosenImage, setChosenImage] = useState<string | null>(null);
+
     // Whether the garment image is settled. A URL emode's servers can already
     // reach needs no handoff and is ready immediately; anything else has to wait,
     // because using it before the bytes arrive stores a URL that will not render
@@ -105,6 +112,11 @@ export function ModalContent({ initialProduct, onClose }: ModalContentProps) {
 
         const onMessage = (e: MessageEvent) => {
             if (e.source !== window.parent) return;
+            if (e.data?.type === 'emode:image-options') {
+                const list = Array.isArray(e.data.images) ? e.data.images : [];
+                setImageOptions(list.filter((u: unknown) => typeof u === 'string').slice(0, 8));
+                return;
+            }
             if (e.data?.type !== 'emode:image') return;
             const url = e.data.dataUrl;
             if (typeof url === 'string' && url.startsWith('data:image/')) {
@@ -128,7 +140,7 @@ export function ModalContent({ initialProduct, onClose }: ModalContentProps) {
     // Current Product Context - use props if provided, otherwise searchParams
     const product = initialProduct || {
         title: searchParams.get('title') || 'Midnight Blazer',
-        image: handoffImage || searchParams.get('image') || 'https://images.unsplash.com/photo-1591047139829-d91aecb6caea?q=80&w=400&h=600&auto=format&fit=crop',
+        image: chosenImage || handoffImage || searchParams.get('image') || 'https://images.unsplash.com/photo-1591047139829-d91aecb6caea?q=80&w=400&h=600&auto=format&fit=crop',
         price: searchParams.get('price') || '$299.00',
     };
     // Shopify's theme extension identifies the store by domain (?shop=), the widget
@@ -602,6 +614,35 @@ export function ModalContent({ initialProduct, onClose }: ModalContentProps) {
                                             <p className="text-lg font-medium text-charcoal/60">{product.price}</p>
                                         </div>
                                     </div>
+
+                                    {/* The page's other pictures. Detection picks a best guess and
+                                        is sometimes wrong — a lifestyle shot instead of the garment
+                                        — and no ranking rule settles it, because a gallery renders
+                                        both at the same size. Correcting it should cost one click. */}
+                                    {imageOptions.length > 1 && (
+                                        <div className="mb-6">
+                                            <p className="text-[10px] uppercase tracking-[0.2em] font-bold text-charcoal/40 mb-2">
+                                                Wrong picture?
+                                            </p>
+                                            <div className="flex gap-2 overflow-x-auto pb-1">
+                                                {imageOptions.map((src) => (
+                                                    <button
+                                                        key={src}
+                                                        onClick={() => setChosenImage(src)}
+                                                        aria-label="Use this picture"
+                                                        aria-pressed={product.image === src}
+                                                        className={`w-14 h-16 rounded-md overflow-hidden shrink-0 bg-white border-2 transition-all p-0.5 ${
+                                                            product.image === src
+                                                                ? 'border-accent-gold'
+                                                                : 'border-black/10 hover:border-black/30'
+                                                        }`}
+                                                    >
+                                                        <img src={src} alt="" className="w-full h-full object-contain" />
+                                                    </button>
+                                                ))}
+                                            </div>
+                                        </div>
+                                    )}
                                 </div>
                             )}
 

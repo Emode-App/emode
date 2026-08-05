@@ -56,6 +56,29 @@
         return title || String(raw).trim();
     }
 
+    const CURRENCY_SYMBOLS = {
+        USD: '$', CAD: '$', AUD: '$', NZD: '$', EUR: '€', GBP: '£',
+        JPY: '¥', CNY: '¥', KRW: '₩', INR: '₹', CHF: 'CHF ',
+    };
+
+    /**
+     * "$85.00", not "USD 85.00".
+     *
+     * Structured data gives the amount and an ISO currency code separately, and
+     * joining them produced a price no storefront would ever print. Unknown
+     * codes keep the code, which is better than guessing a symbol wrong.
+     */
+    function formatPrice(amount, currency) {
+        if (amount == null || amount === '') return undefined;
+
+        const value = String(amount).trim();
+        const code = String(currency || '').trim().toUpperCase();
+        if (!code) return value;
+
+        const symbol = CURRENCY_SYMBOLS[code];
+        return symbol ? `${symbol}${value}` : `${code} ${value}`;
+    }
+
     function absoluteUrl(src) {
         if (!src) return '';
         try {
@@ -103,7 +126,7 @@
                     return {
                         title: cleanProductTitle(node.name),
                         image: absoluteUrl(String(imageUrl)),
-                        price: price != null ? `${currency ? currency + ' ' : ''}${price}` : undefined,
+                        price: formatPrice(price, currency),
                         productId: node.productID ? String(node.productID)
                             : (node.sku ? String(node.sku) : undefined),
                         url: window.location.href,
@@ -152,7 +175,7 @@
         return {
             title: cleanProductTitle(title),
             image: absoluteUrl(image),
-            price: amount ? `${currency ? currency + ' ' : ''}${amount}` : undefined,
+            price: formatPrice(amount, currency),
             url: window.location.href,
             source: 'opengraph',
         };
@@ -225,16 +248,47 @@
      * quality floor, rejecting logos, icons, tracking pixels, and images that
      * have not decoded yet.
      */
+    /**
+     * How much of this element is actually on screen.
+     *
+     * Layout area alone cannot pick a product shot out of a carousel: every
+     * slide is rendered at identical size and every one reports as visible, so
+     * on a Shopify gallery four images tied at exactly 149630px² and the winner
+     * was whichever appeared first in the DOM. That was a lifestyle photo — a
+     * figure across a courtyard — and it kept being handed to the generator no
+     * matter how the ranking was phrased, because the ranking had nothing to
+     * discriminate on.
+     *
+     * Off-screen slides are translated outside the viewport, so intersecting
+     * with it separates the picture the shopper is looking at from its siblings.
+     */
+    function onScreenArea(el) {
+        const style = window.getComputedStyle(el);
+        if (style.visibility === 'hidden' || style.opacity === '0') return 0;
+        if (el.closest('[aria-hidden="true"]')) return 0;
+
+        const r = el.getBoundingClientRect();
+        const w = Math.max(0, Math.min(r.right, window.innerWidth) - Math.max(r.left, 0));
+        const h = Math.max(0, Math.min(r.bottom, window.innerHeight) - Math.max(r.top, 0));
+        return w * h;
+    }
+
     function imageCandidates(scope) {
         return Array.from((scope || document).querySelectorAll('img'))
             .filter((img) => img.offsetParent !== null && img.naturalWidth > 150)
             .filter((img) => looksLikeProductImage(img.currentSrc || img.src))
             .map((img) => {
                 const r = img.getBoundingClientRect();
-                return { src: img.currentSrc || img.src, area: r.width * r.height };
+                return {
+                    src: img.currentSrc || img.src,
+                    area: r.width * r.height,
+                    visible: onScreenArea(img),
+                };
             })
             .filter((c) => c.area > 0 && c.src)
-            .sort((a, b) => b.area - a.area);
+            // On screen first; layout size only breaks ties between images that
+            // are equally visible.
+            .sort((a, b) => (b.visible - a.visible) || (b.area - a.area));
     }
 
     function largestImage(scope) {
@@ -328,6 +382,7 @@
     }
 
     global.emodeDetect = {
+        onScreenArea,
         isPinned,
         cleanProductTitle,
         findAnchor,

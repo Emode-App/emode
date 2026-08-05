@@ -175,11 +175,32 @@ function isCatalogPage() {
     return positiveSignals >= 1;
 }
 
+// A product card is a picture you can click to buy the thing in it. Editorial
+// photography, hero banners, lookbook stills and article thumbnails are not,
+// however much they look alike.
+const PRODUCT_HREF_RE = /\/(products?|p|item|items|dp|sku|prod|listing|shop\/[^/]+\/[^/]+)(\/|\?|$)/i;
+const EDITORIAL_HREF_RE = /\/(stories|story|blog|article|news|guides?|lookbook|editorial|magazine|journal|about|help|careers)(\/|\?|$)/i;
+
 function isValidProductCard(img) {
     if (!img || img.tagName !== 'IMG') return false;
 
     const rect = img.getBoundingClientRect();
     if (rect.width < 150 || rect.height < 150) return false;
+
+    // The image must itself be the clickable target of a product link.
+    //
+    // Without this the check leant on findProductContainer, which walks upward
+    // until the container dwarfs the image — on a homepage that swallows a whole
+    // section, so prices and product links belonging to entirely different
+    // modules counted as this image's own. A magazine still on Lyst's front page
+    // passed, and the try-on pill appeared over an article photo. It is why the
+    // buttons turned up on "damn near any picture" while browsing.
+    const anchor = img.closest('a[href]');
+    if (!anchor) return false;
+
+    const href = anchor.getAttribute('href') || '';
+    if (EDITORIAL_HREF_RE.test(href)) return false;
+    if (!PRODUCT_HREF_RE.test(href)) return false;
 
     // Find container
     const container = findProductContainer(img);
@@ -221,7 +242,9 @@ function isValidProductCard(img) {
 
     const hasNearbyTitle = nearbyTextElements.length > 0;
 
-    const isValid = (hasPrice || hasProductLink) && (hasValidAlt || hasNearbyTitle);
+    // Price is now required, not merely preferred. A product card without a
+    // price on it is usually not a product card.
+    const isValid = hasPrice && (hasValidAlt || hasNearbyTitle);
 
     console.log('[emodeAI] Product Card Validation:', {
         imgSrc: img.src.substring(0, 50),
@@ -775,6 +798,26 @@ function openModal(context) {
 
     const iframe = document.createElement('iframe');
     iframe.src = modalUrl;
+
+    // Hand over every candidate image once the modal says it is listening.
+    //
+    // Which photo on a product page is the garment is not reliably decidable: a
+    // gallery renders its lifestyle shot and its cutout at identical size, both
+    // on screen, so every ranking rule ties and the winner is whichever the
+    // markup happened to list first. Rather than keep guessing, give the shopper
+    // the page's other pictures and let them correct it in one click. Sent by
+    // postMessage because eight URLs do not fit in a query string.
+    const handoffImages = (context.alternateImages || []).slice(0, 8);
+    const onModalReady = (event) => {
+        if (event.origin !== BASE_URL) return;
+        if (event.data && event.data.type === 'emode:ready' && handoffImages.length > 1) {
+            iframe.contentWindow?.postMessage(
+                { type: 'emode:image-options', images: handoffImages },
+                BASE_URL
+            );
+        }
+    };
+    window.addEventListener('message', onModalReady);
     Object.assign(iframe.style, {
         width: '95%',
         height: '95%',
