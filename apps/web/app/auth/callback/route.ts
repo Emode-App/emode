@@ -46,17 +46,28 @@ export async function GET(request: Request) {
      * Link email template to send token_hash — see docs/auth-email-template.md.
      */
     if (tokenHash) {
-        const { error: otpError } = await supabase.auth.verifyOtp({
-            type: (otpType as any) || 'email',
-            token_hash: tokenHash,
-        });
+        // Try the type the template sent, then the other name for the same thing.
+        // Supabase accepts both 'email' and 'magiclink' for a magic-link token
+        // depending on how the link was minted, and getting it wrong reads as an
+        // invalid token — indistinguishable, to the user, from an expired link.
+        const candidates = otpType
+            ? [otpType, otpType === 'email' ? 'magiclink' : 'email']
+            : ['email', 'magiclink'];
 
-        if (otpError) {
-            return NextResponse.redirect(
-                new URL(`/login?error=${encodeURIComponent(otpError.message)}`, requestUrl.origin)
-            );
+        let lastError: string | null = null;
+        for (const type of candidates) {
+            const { error } = await supabase.auth.verifyOtp({
+                type: type as any,
+                token_hash: tokenHash,
+            });
+            if (!error) return NextResponse.redirect(new URL(next, requestUrl.origin));
+            lastError = error.message;
         }
-        return NextResponse.redirect(new URL(next, requestUrl.origin));
+
+        return NextResponse.redirect(
+            new URL(`/login?error=${encodeURIComponent(lastError || 'Sign-in link is invalid.')}`,
+                requestUrl.origin)
+        );
     }
 
     if (!code) {
