@@ -6,8 +6,8 @@ export const Hero = () => {
     // Clear the nav and stop.
     return (
         <section className="relative pt-24 md:pt-28 pb-16 overflow-hidden">
-            <div className="max-w-[90rem] mx-auto px-8 relative z-10 grid grid-cols-1 lg:grid-cols-12 gap-12 items-center">
-                <div className="lg:col-span-5 flex-shrink-0 mb-16 lg:mb-0 pr-4">
+            <div className="max-w-[90rem] mx-auto px-8 relative z-10 grid grid-cols-1 lg:grid-cols-12 gap-8 lg:gap-12 items-center">
+                <div className="lg:col-span-5 flex-shrink-0 mb-2 lg:mb-0 pr-4">
                     <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-black/5 border border-black/10 text-xs font-semibold uppercase tracking-widest text-charcoal mb-6">
                         <span className="w-2 h-2 rounded-full bg-purple-500 animate-pulse"></span>
                         The Future of Fashion
