@@ -56,12 +56,16 @@ export default function OnboardingPage() {
             if (user) {
                 setSignedIn(true);
                 setBuyerEmail(user.email || '');
-                const { data: merchant } = await supabase
+                // Newest first rather than .single(): owning two stores is ordinary,
+                // and .single() would treat the second as an error and find nothing.
+                // Right after a purchase the newest is the one just bought.
+                const { data: owned } = await supabase
                     .from('merchants')
                     .select('id, brand_name')
                     .eq('owner_user_id', user.id)
-                    .single();
+                    .order('created_at', { ascending: false });
 
+                const merchant = owned?.[0];
                 if (merchant) {
                     setMerchantId(merchant.id);
                     if (merchant.brand_name) setBrandName(merchant.brand_name);
@@ -72,7 +76,7 @@ export default function OnboardingPage() {
                         .from('merchants')
                         .select('id, brand_name')
                         .eq('shop_domain', user.email || '')
-                        .single();
+                        .maybeSingle();
 
                     if (merchantByEmail) {
                         setMerchantId(merchantByEmail.id);

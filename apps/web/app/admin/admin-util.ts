@@ -18,14 +18,26 @@ export async function getMerchantForUser() {
     const { data: { user } } = await supabase.auth.getUser();
     if (!user) return null;
 
-    // Find merchant by owner_user_id
-    const { data: merchant } = await serviceClient
+    // Find merchant by owner_user_id.
+    //
+    // Not .single(): one person can genuinely own more than one store — a Shopify
+    // shop and a custom storefront is an ordinary situation, and each gets its own
+    // merchant row. PostgREST's .single() treats a second row as an error and
+    // returns null, so the moment a merchant opened a second store their dashboard
+    // would go blank and report nothing wrong. Take the newest and carry on; a
+    // real store switcher is the eventual answer, but silently losing the whole
+    // dashboard is not an acceptable stand-in for one.
+    const { data: owned, error: ownedError } = await serviceClient
         .from('merchants')
         .select('*')
         .eq('owner_user_id', user.id)
-        .single();
+        .order('created_at', { ascending: false });
 
-    if (merchant) return merchant;
+    if (ownedError) console.error('[admin] Merchant lookup failed:', ownedError.message);
+    if (owned && owned.length > 1) {
+        console.warn(`[admin] User ${user.id} owns ${owned.length} merchants; showing the newest.`);
+    }
+    if (owned?.length) return owned[0];
 
     // Fallback: find by email. This is how a merchant created by the Stripe
     // webhook is found when the buyer paid before they had an emode account —
@@ -34,7 +46,7 @@ export async function getMerchantForUser() {
         .from('merchants')
         .select('*')
         .eq('shop_domain', user.email || '')
-        .single();
+        .maybeSingle(); // No row is the normal case for a user with no purchase yet.
 
     if (!merchantByEmail) return null;
 
