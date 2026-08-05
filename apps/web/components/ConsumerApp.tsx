@@ -16,24 +16,10 @@ import { Sparkles, Users, Tag, Scissors, ArrowRight, Check } from 'lucide-react'
  */
 
 const SCREENS = [
-    {
-        src: '/app/feed.jpg',
-        alt: 'The emode feed: a post showing an outfit, tagged with the brands worn',
-        caption: 'A feed of outfits, not ads',
-        rotate: '-rotate-2',
-    },
-    {
-        src: '/app/dressing-room.jpg',
-        alt: 'Two secondhand items photographed by their seller, rendered on a person in the dressing room',
-        caption: 'Someone’s closet, on your body',
-        rotate: 'rotate-1',
-    },
-    {
-        src: '/app/shop.jpg',
-        alt: 'Tapping a post reveals the exact pieces in it with prices and links',
-        caption: 'Every piece, tagged and shoppable',
-        rotate: 'rotate-2',
-    },
+    { src: '/app/01-feed.jpg', alt: 'The emode feed: an outfit post tagged with the brands worn' },
+    { src: '/app/02-tryon.jpg', alt: 'AI try-on: two secondhand items rendered onto a person as one outfit' },
+    { src: '/app/03-shop.jpg', alt: 'Tapping a post reveals the exact pieces in it, with prices and links' },
+    { src: '/app/04-sell.jpg', alt: 'A profile selling listings directly, with sizes, condition and prices' },
 ];
 
 const PILLARS = [
@@ -142,22 +128,26 @@ export function ConsumerApp() {
                 </div>
 
                 {/* Screens before the feature list. A try-on app is a visual claim,
-                    and describing it in prose to someone who has not seen it is
-                    asking them to take the whole thing on faith. */}
-                <div className="grid grid-cols-1 sm:grid-cols-3 gap-6 sm:gap-8 mb-20">
-                    {SCREENS.map((s) => (
-                        <figure key={s.src} className="group">
-                            <div
-                                className={`rounded-2xl overflow-hidden border border-white/10 shadow-2xl transition-transform duration-500 ${s.rotate} group-hover:rotate-0`}
-                            >
-                                {/* eslint-disable-next-line @next/next/no-img-element */}
-                                <img src={s.src} alt={s.alt} loading="lazy" className="w-full block" />
-                            </div>
-                            <figcaption className="mt-5 text-xs uppercase tracking-widest text-white/40 text-center">
-                                {s.caption}
-                            </figcaption>
-                        </figure>
-                    ))}
+                    and describing it in prose to someone who has not seen it asks
+                    them to take the whole thing on faith.
+
+                    No captions here: these carry their own headlines, and a second
+                    label underneath would either repeat them or argue with them.
+                    Horizontal scroll on narrow screens rather than a 4-up grid
+                    that crushes each phone to a thumbnail. */}
+                <div className="-mx-6 px-6 mb-20 overflow-x-auto">
+                    <div className="flex gap-5 min-w-max sm:min-w-0 sm:grid sm:grid-cols-2 lg:grid-cols-4">
+                        {SCREENS.map((s) => (
+                            /* eslint-disable-next-line @next/next/no-img-element */
+                            <img
+                                key={s.src}
+                                src={s.src}
+                                alt={s.alt}
+                                loading="lazy"
+                                className="w-64 sm:w-full rounded-2xl border border-white/10 shadow-2xl"
+                            />
+                        ))}
+                    </div>
                 </div>
 
                 <div className="grid grid-cols-1 lg:grid-cols-2 gap-16 items-start">
