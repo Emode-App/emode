@@ -2,6 +2,8 @@ import { createClient } from '@supabase/supabase-js';
 import { Search, Sparkles, SlidersHorizontal } from 'lucide-react';
 import Link from 'next/link';
 import { ModalContent } from '../modal/ModalContent';
+import { SaveButton } from './SaveButton';
+import { createSupabaseServerClient } from '../../lib/supabase/server';
 
 const supabase = createClient(
     process.env.NEXT_PUBLIC_SUPABASE_URL!,
@@ -111,6 +113,29 @@ async function getBrands() {
     );
 }
 
+/**
+ * Which of these the viewer has already hearted.
+ *
+ * The listing itself is fetched with the service client, which has no idea who
+ * is looking — so the saved state has to be resolved separately against the
+ * signed-in user. Signed-out visitors get an empty set and hollow hearts.
+ */
+async function getSavedProductIds(productIds: string[]): Promise<Set<string>> {
+    if (!productIds.length) return new Set();
+
+    const authed = await createSupabaseServerClient();
+    const { data: { user } } = await authed.auth.getUser();
+    if (!user) return new Set();
+
+    const { data } = await supabase
+        .from('saved_items')
+        .select('product_id')
+        .eq('user_id', user.id)
+        .in('product_id', productIds);
+
+    return new Set((data || []).map((r: any) => r.product_id));
+}
+
 export const dynamic = 'force-dynamic';
 
 export default async function MarketplacePage({
@@ -121,6 +146,7 @@ export default async function MarketplacePage({
     const params = await searchParams;
     const products = await getMarketplaceProducts(params.category, params.search, params.brand);
     const brands = await getBrands();
+    const savedIds = await getSavedProductIds(products.map((p) => p.id));
     const activeCategory = params.category || 'all';
     const activeBrand = params.brand || '';
 
@@ -211,6 +237,11 @@ export default async function MarketplacePage({
                 <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-8">
                     {products.map((product) => (
                         <div key={product.id} className="group relative bg-white overflow-hidden rounded-2xl shadow-sm hover:shadow-2xl transition-all duration-500 border border-black/5">
+                            <SaveButton
+                                productId={product.id}
+                                merchantId={product.merchant_id || null}
+                                initiallySaved={savedIds.has(product.id)}
+                            />
                             <div className="relative aspect-[3/4] overflow-hidden">
                                 {product.primary_image_url ? (
                                     <img

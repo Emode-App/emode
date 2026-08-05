@@ -46,13 +46,31 @@ export default async function ClosetPage() {
 
     const roomIds = (rooms || []).map((r: any) => r.id);
 
-    const { data: items } = roomIds.length
-        ? await serviceClient
-            .from('dressing_room_items')
-            .select('id, created_at, product:products(title, primary_image_url), variant:variants(price)')
-            .in('dressing_room_id', roomIds)
-            .order('created_at', { ascending: false })
-        : { data: [] as any[] };
+    const [{ data: roomItems }, { data: hearted }] = await Promise.all([
+        roomIds.length
+            ? serviceClient
+                .from('dressing_room_items')
+                .select('id, created_at, product:products(title, primary_image_url), variant:variants(price)')
+                .in('dressing_room_id', roomIds)
+                .order('created_at', { ascending: false })
+            : Promise.resolve({ data: [] as any[] }),
+        serviceClient
+            .from('saved_items')
+            .select('id, saved_at, product:products(title, primary_image_url), variant:variants(price)')
+            .eq('user_id', user.id)
+            .order('saved_at', { ascending: false }),
+    ]);
+
+    // One shelf, two sources. A shopper does not think of "the thing I hearted
+    // in the marketplace" and "the thing I added on a brand's site" as living in
+    // different places — they think of it as what they saved.
+    const seen = new Set<string>();
+    const items = [...(hearted || []), ...(roomItems || [])].filter((item: any) => {
+        const title = item.product?.title;
+        if (!title || seen.has(title)) return false;
+        seen.add(title);
+        return true;
+    });
 
     const usedToday = (usageRows || []).reduce(
         (sum: number, row: any) => sum + (row.generations_used || 0),
