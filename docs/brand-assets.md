@@ -1,39 +1,47 @@
 # Brand assets
 
-The code references these paths already and degrades to the type wordmark until
-the files exist, so nothing breaks while they are missing — but nothing shows the
-real mark either.
+All generated from the two source files, and committed. Nothing here needs
+re-doing unless the logo itself changes.
 
-## Files to add
-
-| Path | What | Notes |
+| Path | What | Used by |
 |---|---|---|
-| `apps/web/public/brand/emode-logo.png` | Full lockup (E monogram + "Emode" + "Internet fashion.") | Transparent background. Used in the navbar, footer and login. |
-| `apps/web/public/brand/emode-mark.png` | E monogram alone | Transparent background, square. Used in the admin sidebar, where the full lockup would be illegible at the width available. |
-| `apps/web/app/icon.png` | Favicon | Next.js App Router picks this up by filename — no config, no `<link>` tag. 512×512, square, transparent. Use the monogram; a wordmark is unreadable at 16px. |
-| `apps/web/app/apple-icon.png` | iOS home screen | 180×180. Same convention. Needs an opaque background: iOS composites transparency onto black. |
-| `apps/chrome/icons/emode-mark.png` | Side panel header | ~64px tall. |
-| `apps/chrome/icons/icon16.png`<br>`icon48.png`<br>`icon128.png` | Extension icons | **Required by the Chrome Web Store**; the manifest currently declares none. |
+| `apps/web/public/brand/emode-logo.png` | Full lockup | Navbar, footer, login |
+| `apps/web/public/brand/emode-mark.png` | E monogram | Admin sidebar |
+| `apps/web/app/icon.png` | Favicon, 512² | Next.js App Router picks this up by filename — no config, no `<link>` |
+| `apps/web/app/apple-icon.png` | iOS home screen, 180² | Same convention |
+| `apps/chrome/icons/emode-mark.png` | Side panel header | |
+| `apps/chrome/icons/icon{16,48,128}.png` | Extension icons | Required by the Chrome Web Store |
 
-## Transparency
+## How they were made
 
-Both images as supplied have a cream background baked in. That is fine on the
-marketing site, which is cream, and wrong everywhere else — the admin sidebar is
-near-black, the extension panel is white, and a cream rectangle floating on either
-reads as a mistake. Export with a transparent background.
+The supplied artwork is black line-work on flat cream, at 1254², with roughly 20%
+dead space on every side.
 
-The admin sidebar applies a CSS `invert` to the monogram so a black mark reads on
-a dark background. That works on a transparent PNG and looks broken on a cream
-one.
+**Transparency comes from darkness, not from keying out the background.** Alpha is
+derived per pixel as `255 × (bgLuminance − pixelLuminance) / bgLuminance`. Because
+the artwork is black on a flat ground, darkness *is* coverage — so every
+antialiased edge survives intact and no cream halo is left behind. Keying out
+"colours near cream" within a tolerance would have fringed every curve, and this
+mark is almost entirely curves.
 
-## After adding them
+That matters because the mark is not only ever shown on cream: the admin sidebar
+is near-black and the extension panel is white. A baked-in cream rectangle reads
+as a mistake on both.
 
-Add the `icons` key to `apps/chrome/manifest.json`:
+**Cropped to the artwork** before resizing. At favicon size, the original's dead
+space would have rendered the mark tiny inside a mostly-empty square.
 
-```json
-"icons": { "16": "icons/icon16.png", "48": "icons/icon48.png", "128": "icons/icon128.png" }
-```
+**`apple-icon.png` is opaque**, filled with the brand cream. iOS composites
+transparency onto black, which would have turned a black monogram into a black
+square.
 
-It is deliberately absent right now: Chrome refuses to load an unpacked
-extension whose manifest points at icon files that do not exist, so adding the
-key before the files would break local development.
+The script that did it is not committed — it was a one-off transformation and the
+outputs are what matter. It is reproduced in the session notes if the source art
+is ever revised.
+
+## Fallback
+
+`components/Logo.tsx` falls back to the type wordmark if an image fails to load.
+Not defensiveness for its own sake: the assets live in `public/`, and a bad
+deploy or a path typo would otherwise put a broken-image icon in the header of
+every page.
