@@ -165,11 +165,29 @@
     const CART_BUTTON_RE =
         /add to (cart|bag|basket)|add-to-cart|addtocart|buy now|purchase|select size|choose size|pick a size|add to my|shop now/i;
 
+    /**
+     * Is this element pinned to the viewport rather than sitting in the page?
+     *
+     * Sticky add-to-cart bars and site headers are chrome: they follow the
+     * shopper around and are not part of the product form. Anchoring to one puts
+     * the try-on buttons in a floating strip at the bottom of the window instead
+     * of beside the real buy button, which is exactly what happened on a Shopify
+     * theme whose sticky bar appears earlier in the DOM than its product form.
+     */
+    function isPinned(el) {
+        for (let node = el; node && node !== document.body; node = node.parentElement) {
+            const position = window.getComputedStyle(node).position;
+            if (position === 'fixed' || position === 'sticky') return true;
+        }
+        return false;
+    }
+
     /** Is this element actually a clickable control a shopper can see? */
     function isUsableControl(el) {
         if (!el || el.offsetParent === null) return false;
         const r = el.getBoundingClientRect();
-        return r.width >= 60 && r.height >= 20;
+        if (r.width < 60 || r.height < 20) return false;
+        return !isPinned(el);
     }
 
     /**
@@ -310,6 +328,7 @@
     }
 
     global.emodeDetect = {
+        isPinned,
         cleanProductTitle,
         findAnchor,
         isUsableControl,

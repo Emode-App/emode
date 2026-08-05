@@ -593,7 +593,37 @@ function cleanTitle(title) {
     return result || 'Unknown Product';
 }
 
+/**
+ * What the modal is told about the product.
+ *
+ * detect.js first. The heuristics below predate it and were left in place when
+ * detection was rewritten, so the extension ended up with two extractors: one
+ * deciding whether a page IS a product, another deciding WHAT the product is,
+ * disagreeing freely. On StockX detection read the Jordan correctly from
+ * structured data while this reported a product called "Browse More" priced at
+ * $290 — a nav link and somebody else's number — and that is what reached the
+ * try-on.
+ *
+ * The heuristics remain as a fallback for pages carrying no structured data at
+ * all, which is what they were always for.
+ */
 function extractProductContext() {
+    const api = global_detect();
+    const detected = api && api.detectProduct();
+
+    if (detected && detected.title && detected.image) {
+        return {
+            title: detected.title,
+            image: detected.image,
+            price: detected.price || '',
+            alternateImages: detected.alternateImages || [],
+        };
+    }
+
+    return extractProductContextHeuristic();
+}
+
+function extractProductContextHeuristic() {
     console.group('[emodeAI] PDP Context Extraction');
 
     const metaPriceVal = document.querySelector('meta[property="product:price:amount"], meta[property="og:price:amount"]')?.content;
