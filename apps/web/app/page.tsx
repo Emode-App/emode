@@ -5,12 +5,53 @@ import { Footer } from '../components/Footer';
 import Link from 'next/link';
 import { Hero } from '../components/Hero';
 import { Sparkles, Zap, Shield, Globe, Check, X, ArrowRight, ShoppingCart, Plus } from 'lucide-react';
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { supabase } from '../lib/supabase/browser';
 
 export default function Home() {
     const [billingCycle, setBillingCycle] = useState<'monthly' | 'lifetime'>('monthly');
     const [checkoutLoading, setCheckoutLoading] = useState<string | null>(null);
+
+    // Catch sign-ins that were dropped here instead of on /auth/callback.
+    //
+    // Supabase redirects to the Site URL — this page — whenever the requested
+    // redirect is not in its allowlist, and it does so silently. The browser
+    // client still picks the code up off the URL, so the user IS signed in; they
+    // are just standing on the landing page wondering why clicking a sign-in link
+    // did nothing. Send them where they were going.
+    //
+    // This is a net, not the fix: the allowlist should contain the callback URL.
+    // But an auth config typo should not be able to strand a paying merchant.
+    useEffect(() => {
+        const params = new URLSearchParams(window.location.search);
+        const hash = new URLSearchParams(window.location.hash.replace(/^#/, ''));
+
+        // An expired or already-used link arrives as a hash fragment, which never
+        // reaches the server — so nothing has ever reported these to the user.
+        const authError = hash.get('error_description') || hash.get('error');
+        if (authError) {
+            window.location.replace(`/login?error=${encodeURIComponent(authError)}`);
+            return;
+        }
+
+        if (!params.get('code')) return;
+
+        // The client exchanges the code on init, so wait for the session rather
+        // than racing it. Give up quietly if it never arrives — the page is
+        // perfectly usable signed out.
+        let attempts = 0;
+        const timer = setInterval(async () => {
+            const { data: { session } } = await supabase.auth.getSession();
+            if (session) {
+                clearInterval(timer);
+                window.location.replace('/admin');
+            } else if (++attempts > 20) {
+                clearInterval(timer);
+            }
+        }, 250);
+
+        return () => clearInterval(timer);
+    }, []);
 
     const handleCheckout = async (planId: string) => {
         setCheckoutLoading(planId);

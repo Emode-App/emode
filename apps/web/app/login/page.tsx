@@ -10,6 +10,38 @@ export default function LoginPage() {
     const [loading, setLoading] = useState(false);
     const [message, setMessage] = useState<{ type: 'success' | 'error', text: string } | null>(null);
     const [oauthLoading, setOauthLoading] = useState<string | null>(null);
+    const [awaitingLink, setAwaitingLink] = useState(false);
+
+    // Already signed in — no reason to show a sign-in form.
+    useEffect(() => {
+        supabase.auth.getSession().then(({ data: { session } }) => {
+            if (session) window.location.replace('/admin');
+        });
+    }, []);
+
+    /**
+     * Follow the sign-in that happens in the other tab.
+     *
+     * A magic link opens a new tab, so this one is left showing "check your
+     * email" forever — the user signs in over there and comes back to a tab that
+     * still looks like it failed. onAuthStateChange cannot help: the session
+     * lives in cookies, and cookies fire no storage event, so this tab is never
+     * told anything. Polling is the only signal available, and reading a cookie
+     * every two seconds costs nothing.
+     */
+    useEffect(() => {
+        if (!awaitingLink) return;
+
+        const timer = setInterval(async () => {
+            const { data: { session } } = await supabase.auth.getSession();
+            if (session) {
+                clearInterval(timer);
+                window.location.replace('/admin');
+            }
+        }, 2000);
+
+        return () => clearInterval(timer);
+    }, [awaitingLink]);
 
     // /auth/callback redirects back here with ?error=... when a magic link is
     // expired, already used, or arrives without a code. Read it off the URL
@@ -68,7 +100,11 @@ export default function LoginPage() {
             });
 
             if (error) throw error;
-            setMessage({ type: 'success', text: 'Check your email for the magic link!' });
+            setAwaitingLink(true);
+            setMessage({
+                type: 'success',
+                text: 'Check your email for the magic link. Leave this tab open — it will take you to your dashboard as soon as you click it.',
+            });
         } catch (error: any) {
             // Supabase returns a terse "email rate limit exceeded" that reads as
             // a bug rather than a quota — say what it means and offer the way out.
