@@ -287,7 +287,11 @@ export default async function MarketplacePage({
                                     </Link>
                                     {(product.buy_url || product.variantBuyUrl) && (
                                         <a
-                                            href={product.buy_url || product.variantBuyUrl || '#'}
+                                            /* Through /api/out so the click is recorded. The
+                                               destination is looked up server-side from the
+                                               product id — passing the URL here would make this
+                                               an open redirect. */
+                                            href={`/api/out?p=${product.id}`}
                                             target="_blank"
                                             rel="noopener noreferrer"
                                             className="w-full py-3 bg-transparent border-2 border-white text-white font-bold rounded-full text-center text-sm scale-90 group-hover:scale-100 transition-transform duration-500 hover:bg-white hover:text-black"
