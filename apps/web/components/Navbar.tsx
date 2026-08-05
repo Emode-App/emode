@@ -48,7 +48,12 @@ export const Navbar = () => {
                 <div className="absolute inset-0 hidden md:flex items-center justify-center pointer-events-none">
                     <div className="flex items-center gap-8 font-medium pointer-events-auto">
                         <Link href="/how-it-works" className="hover:text-accent-gold transition-colors">How it works</Link>
-                        <Link href="/marketplace" className="hover:text-accent-gold transition-colors">Marketplace</Link>
+                        <Link href="/marketplace" className="hover:text-accent-gold transition-colors inline-flex items-center gap-1.5">
+                            Marketplace
+                            <span className="text-[9px] font-bold uppercase tracking-widest text-charcoal/30 border border-black/10 rounded-full px-1.5 py-0.5">
+                                Soon
+                            </span>
+                        </Link>
                         <Link href="/#extensions" className="hover:text-accent-gold transition-colors">Extensions</Link>
                         <Link href="/#pricing" className="hover:text-accent-gold transition-colors">Pricing</Link>
                         {/* The app is a different product for a different person;

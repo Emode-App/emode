@@ -2,6 +2,7 @@ import { getMerchantForUser, serviceClient } from '../admin-util';
 import { Settings, Save, AlertCircle } from 'lucide-react';
 import { revalidatePath } from 'next/cache';
 import { SITE_HOST } from '../../../lib/site';
+import { ManageBilling } from './ManageBilling';
 
 export const dynamic = 'force-dynamic';
 
@@ -120,6 +121,10 @@ export default async function AdminSettingsPage() {
                         </p>
                     </div>
                 </div>
+            </div>
+
+            <div className="mt-8">
+                <ManageBilling />
             </div>
         </div>
     );

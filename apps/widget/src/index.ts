@@ -347,6 +347,16 @@ class EmodeWidget {
     private visitorId: string | null;
     private context: ProductContext | null = null;
     private lastUrl = '';
+    /**
+     * Set when the server reports the merchant has no active plan.
+     *
+     * Cancelling already stops generation server-side, so nobody gets free
+     * try-ons either way. This is about the shopper: without it they would tap a
+     * button on the merchant's storefront, upload a photo, wait, and be told the
+     * store has no plan — which reads as the store being broken, and is suffered
+     * by the one person in the transaction who did nothing wrong.
+     */
+    private inactive = false;
 
     constructor(config: WidgetConfig) {
         this.config = config;
@@ -374,6 +384,10 @@ class EmodeWidget {
 
     /** Idempotent: safe to call on every SPA route change. */
     scan() {
+        // A merchant without a plan gets nothing drawn. Checked first so a
+        // later scan cannot put the buttons back after they were removed.
+        if (this.inactive) return;
+
         // Re-detect when the URL changes even if buttons already exist — SPA
         // navigation swaps the product without reloading the page.
         const urlChanged = this.lastUrl !== window.location.href;
@@ -412,7 +426,15 @@ class EmodeWidget {
                 url: ctx.url,
             }),
             keepalive: true,
-        }).catch(() => { /* analytics must never affect the storefront */ });
+        })
+            .then((res) => (res.ok ? res.json() : null))
+            .then((data) => {
+                if (data && data.active === false) {
+                    this.inactive = true;
+                    document.querySelector(`.${CONTAINER_CLASS}`)?.remove();
+                }
+            })
+            .catch(() => { /* analytics must never affect the storefront */ });
     }
 
     private inject(ctx: ProductContext) {

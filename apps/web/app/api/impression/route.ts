@@ -82,7 +82,29 @@ export async function POST(request: Request) {
                 { onConflict: 'merchant_id,visitor_id,product_id', ignoreDuplicates: true }
             );
 
-        return NextResponse.json({ ok: true }, { headers: corsHeaders });
+        // Tell the widget whether this merchant still has a plan.
+        //
+        // Cancelling revokes the entitlement, so /api/generate already refuses —
+        // a merchant who leaves the script in place gets no free try-ons. But the
+        // BUTTONS still rendered, so their shoppers would upload a photo, wait,
+        // and be told the store has no active plan. That is worse than the
+        // buttons being absent: it is the shopper who eats it, on the merchant's
+        // storefront, and it looks like the store is broken.
+        //
+        // Impression already fires on every product page, so the answer rides
+        // back on a request that was happening anyway.
+        const { data: entitlement } = await supabase
+            .from('entitlements')
+            .select('subject_id')
+            .eq('subject_id', merchantId)
+            .eq('subject_type', 'merchant')
+            .limit(1)
+            .maybeSingle();
+
+        return NextResponse.json(
+            { ok: true, active: Boolean(entitlement) },
+            { headers: corsHeaders }
+        );
     } catch (err) {
         console.error('[API/Impression]', err);
         // Still 200: this is analytics, and the storefront should never see a

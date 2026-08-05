@@ -226,12 +226,35 @@ export default async function MarketplacePage({
 
             {/* Product Grid */}
             {products.length === 0 ? (
-                <div className="text-center py-32">
-                    <Sparkles className="w-12 h-12 mx-auto mb-4 text-charcoal/20" />
-                    <h3 className="text-xl font-heading font-bold mb-2 text-charcoal/40">No Products Yet</h3>
-                    <p className="text-charcoal/30 max-w-md mx-auto">
-                        Products from merchants will appear here as they activate their virtual try-on widgets.
+                /* An empty grid reads as a broken page rather than an unlaunched
+                   one, and "No Products Yet" reads as a failed search. Say what
+                   is actually true: this has not opened. */
+                <div className="text-center py-28 max-w-lg mx-auto">
+                    <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-black/5 text-[10px] font-bold uppercase tracking-widest text-charcoal/50 mb-6">
+                        <Sparkles className="w-3 h-3" /> Opening soon
+                    </div>
+                    <h3 className="text-2xl font-heading font-bold mb-3">
+                        The marketplace hasn&apos;t opened yet
+                    </h3>
+                    <p className="text-charcoal/50 leading-relaxed mb-8">
+                        One place to browse pieces from every brand on emode and try them on
+                        before you buy. We&apos;re signing up the first brands now — it opens
+                        when there is something here worth browsing.
                     </p>
+                    <div className="flex flex-col sm:flex-row gap-3 justify-center">
+                        <Link
+                            href="/#app"
+                            className="px-6 py-3 bg-obsidian text-white rounded-xl text-xs font-bold uppercase tracking-widest hover:bg-black transition-colors"
+                        >
+                            Get told when it opens
+                        </Link>
+                        <Link
+                            href="/#pricing"
+                            className="px-6 py-3 border border-black/10 rounded-xl text-xs font-bold uppercase tracking-widest hover:bg-black/5 transition-colors"
+                        >
+                            List your brand
+                        </Link>
+                    </div>
                 </div>
             ) : (
                 <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-8">

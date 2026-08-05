@@ -39,7 +39,7 @@ const FAQS = [
     },
     {
         q: 'What is the marketplace?',
-        a: 'A shared storefront where shoppers browse pieces from every brand on emode and try them on before clicking through to buy. It is included on Pro and above. It is new, so it is small — you would be early rather than joining something busy.',
+        a: 'A shared storefront where shoppers browse pieces from every brand on emode and try them on before clicking through to buy. It is included on Pro and above. It has not launched yet — there are no listings in it today, and we would rather say so than have you find out. Your plan reserves your place; publishing your products is one toggle when it opens.',
     },
     {
         q: 'What if my product photos are on models, not flat lays?',

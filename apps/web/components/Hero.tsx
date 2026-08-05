@@ -28,8 +28,8 @@ export const Hero = () => {
                             Start styling
                             <span className="inline-block transition-transform group-hover:translate-x-1 ml-2">→</span>
                         </a>
-                        <Link href="/marketplace" className="px-10 py-4 border border-black/10 rounded-full font-semibold hover:bg-black hover:text-white transition-all">
-                            Explore Marketplace
+                        <Link href="/how-it-works" className="px-10 py-4 border border-black/10 rounded-full font-semibold hover:bg-black hover:text-white transition-all">
+                            See how it works
                         </Link>
                     </div>
                 </div>
