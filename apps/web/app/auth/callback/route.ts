@@ -15,7 +15,8 @@ export async function GET(request: Request) {
     const code = requestUrl.searchParams.get('code');
     const tokenHash = requestUrl.searchParams.get('token_hash');
     const otpType = requestUrl.searchParams.get('type');
-    const next = requestUrl.searchParams.get('next') || '/admin';
+    // Not '/admin': that assumes every account is a brand. /auth/home resolves it.
+    const next = requestUrl.searchParams.get('next') || '/auth/home';
 
     // Supabase reports link problems (expired, already used) here rather than
     // by omitting the code, so surface them instead of failing silently.

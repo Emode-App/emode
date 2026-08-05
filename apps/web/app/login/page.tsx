@@ -47,7 +47,7 @@ export default function LoginPage() {
         if (new URLSearchParams(window.location.search).get('error')) return;
 
         supabase.auth.getSession().then(({ data: { session } }) => {
-            if (session) window.location.replace('/admin');
+            if (session) window.location.replace('/auth/home');
         });
     }, []);
 
@@ -68,7 +68,7 @@ export default function LoginPage() {
             const { data: { session } } = await supabase.auth.getSession();
             if (session) {
                 clearInterval(timer);
-                window.location.replace('/admin');
+                window.location.replace('/auth/home');
             }
         }, 2000);
 
@@ -100,8 +100,9 @@ export default function LoginPage() {
                 options: {
                     // No query string: Supabase matches redirect URLs against the
                     // allowlist literally, and `?next=` made it fall through to the
-                    // Site URL (the landing page). /auth/callback already sends
-                    // users to /admin by default.
+                    // Site URL (the landing page). /auth/callback forwards to
+                    // /auth/home, which decides between the closet and the
+                    // merchant dashboard.
                     redirectTo: `${window.location.origin}/auth/callback`,
                 },
             });
@@ -135,7 +136,7 @@ export default function LoginPage() {
             setAwaitingLink(true);
             setMessage({
                 type: 'success',
-                text: 'Check your email for the magic link. Leave this tab open — it will take you to your dashboard as soon as you click it.',
+                text: 'Check your email for the magic link. Leave this tab open — it will sign you in as soon as you click it.',
             });
         } catch (error: any) {
             // Supabase returns a terse "email rate limit exceeded" that reads as

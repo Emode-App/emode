@@ -44,7 +44,7 @@ export default function Home() {
             const { data: { session } } = await supabase.auth.getSession();
             if (session) {
                 clearInterval(timer);
-                window.location.replace('/admin');
+                window.location.replace('/auth/home');
             } else if (++attempts > 20) {
                 clearInterval(timer);
             }
