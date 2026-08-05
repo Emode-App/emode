@@ -31,13 +31,18 @@ export default async function AdminProductsPage() {
         console.error('[admin/products] Failed to load products:', productsError);
     }
 
-    // Fetch generation counts for each product
+    // Try-on counts come from generation_products, not generations.product_id.
+    //
+    // generations holds one product_id — the page the modal was opened from — so
+    // a garment that was only ever worn as part of an outfit reads zero here,
+    // which is the same bug the overview and analytics pages had. Three pages
+    // counted the same thing three separate ways; this is the third.
     let productStats = products || [];
     if (productStats.length > 0) {
         productStats = await Promise.all(
             productStats.map(async (product) => {
                 const { count } = await serviceClient
-                    .from('generations')
+                    .from('generation_products')
                     .select('*', { count: 'exact', head: true })
                     .eq('product_id', product.id);
                 return { ...product, tryOnCount: count || 0 };

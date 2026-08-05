@@ -4,6 +4,7 @@ import { createSupabaseServerClient } from '../../lib/supabase/server';
 import { redirect } from 'next/navigation';
 import { LayoutDashboard, Package, Users, BarChart3, Settings, LogOut, Code2 } from 'lucide-react';
 import { SignOutButton } from './components/SignOutButton';
+import { AdminNav, AdminSettingsLink } from './components/AdminNav';
 
 export const dynamic = 'force-dynamic';
 
@@ -37,22 +38,10 @@ export default async function AdminLayout({
             <aside className="w-64 bg-obsidian text-white p-8 flex flex-col gap-8 fixed h-full z-20">
                 <div className="text-2xl font-heading font-bold italic mb-4 text-center pr-4">emodeAdmin</div>
                 <nav className="flex flex-col gap-2">
-                    <Link href="/admin" className="flex items-center gap-3 px-4 py-3 bg-white/10 rounded-lg text-sm font-medium">
-                        <LayoutDashboard className="w-4 h-4" /> Overview
-                    </Link>
-                    <Link href="/admin/products" className="flex items-center gap-3 px-4 py-3 hover:bg-white/5 rounded-lg text-sm font-medium transition-colors">
-                        <Package className="w-4 h-4" /> Products
-                    </Link>
-                    <Link href="/admin/install" className="flex items-center gap-3 px-4 py-3 hover:bg-white/5 rounded-lg text-sm font-medium transition-colors">
-                        <Code2 className="w-4 h-4" /> Install Widget
-                    </Link>
-                    <Link href="/admin/analytics" className="flex items-center gap-3 px-4 py-3 hover:bg-white/5 rounded-lg text-sm font-medium transition-colors">
-                        <BarChart3 className="w-4 h-4" /> Analytics
-                    </Link>
+                    <AdminNav />
+
                     <div className="mt-8 pt-8 border-t border-white/10">
-                        <Link href="/admin/settings" className="flex items-center gap-3 px-4 py-3 hover:bg-white/5 rounded-lg text-sm font-medium transition-colors">
-                            <Settings className="w-4 h-4" /> Settings
-                        </Link>
+                        <AdminSettingsLink />
                         {user ? (
                             <>
                                 <div className="mt-2 px-4 py-2 text-xs text-white/40 truncate">
