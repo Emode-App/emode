@@ -2,6 +2,8 @@ import { BarChart3, Users, Package, Zap, RefreshCw, Crown } from 'lucide-react';
 import { getMerchantForUser, serviceClient } from './admin-util';
 import { WidgetInstallCode } from './components/WidgetInstallCode';
 import { AttributionPanel, TryOnStats } from './components/AttributionPanel';
+import { ChoosePlan } from './components/ChoosePlan';
+import { createSupabaseServerClient } from '../../lib/supabase/server';
 
 async function getStats(merchantId?: string) {
     // Build queries — filter by merchant if available
@@ -91,6 +93,21 @@ export const dynamic = 'force-dynamic';
 
 export default async function AdminDashboard() {
     const merchant = await getMerchantForUser();
+
+    // Signed up, hasn't bought yet.
+    //
+    // This state used to fall through to the merchant dashboard with merchantId
+    // undefined — which does not scope the queries, it removes the filter. Every
+    // number became a platform-wide total, and "Top Products" listed other
+    // brands' products by name and image, to anyone who had created an account.
+    // Nothing in the layout suggested it was doing that; the labels just changed
+    // from "Your Try-Ons" to "Total Try-Ons".
+    if (!merchant) {
+        const supabase = await createSupabaseServerClient();
+        const { data: { user } } = await supabase.auth.getUser();
+        return <ChoosePlan email={user?.email} />;
+    }
+
     const stats = await getStats(merchant?.id);
     const topProducts = await getTopProducts(merchant?.id);
     const tryOnStats = await getTryOnStats(merchant?.id);
