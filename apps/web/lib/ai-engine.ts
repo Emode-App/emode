@@ -263,8 +263,8 @@ class AIEngine {
             : `Setting: a plain white seamless studio background, evenly lit, with a soft natural shadow beneath the model. No props, no furniture, no set dressing.`;
 
         const poseDirection = scene
-            ? `Pose the model naturally for that setting, full length and clearly showing the garment.`
-            : `Standard catalogue pose: standing, full length, facing the camera square on, weight settled, arms relaxed at the sides, feet roughly shoulder width. Neutral expression. Shot at eye level on a portrait lens.`;
+            ? `Pose the model naturally for that setting. Full-length framing: the entire body from the top of the head to the shoes is inside the frame.`
+            : `Standard catalogue pose: standing, facing the camera square on, weight settled, arms relaxed at the sides, feet roughly shoulder width apart. Neutral expression.`;
 
         const prompt = `
             You are a fashion photographer producing a product image for a brand's own store.
@@ -284,6 +284,13 @@ class AIEngine {
             ${poseDirection}
 
             ${sceneDirection}
+
+            FRAMING. Full-length, head to toe. The entire body must be inside the frame,
+            from the top of the head down to the shoes, with clear space above and below.
+            Do not crop at the knees, the waist, the chest or the shoulders. This is a
+            full-body product shot, not a portrait and not a close-up on the garment.
+            Camera at roughly chest height and far enough back that the whole figure
+            fits without distortion.
 
             Photorealism is the requirement, not a style. This must read as a photograph
             taken with a camera, not as a render or an illustration:
