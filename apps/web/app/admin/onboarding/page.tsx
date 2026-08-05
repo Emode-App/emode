@@ -18,13 +18,44 @@ export default function OnboardingPage() {
     const [saving, setSaving] = useState(false);
     const [saved, setSaved] = useState(false);
     const [copied, setCopied] = useState(false);
+    const [lookupError, setLookupError] = useState<string | null>(null);
+    const [buyerEmail, setBuyerEmail] = useState('');
+    const [signedIn, setSignedIn] = useState(false);
     const [step, setStep] = useState<'welcome' | 'brand' | 'install'>(isCheckoutSuccess ? 'welcome' : 'install');
 
     useEffect(() => {
         // Try to find merchant for current user
         const loadMerchant = async () => {
             const { data: { user } } = await supabase.auth.getUser();
+
+            // Signed out, straight off a payment. This is the common case for a
+            // brand that found emode on the pricing page: they have a merchant
+            // account created by the webhook and no login yet, so the checkout
+            // session is the only thing that can identify them. Without this the
+            // install snippet says YOUR_MERCHANT_ID and they are stuck holding a
+            // receipt.
+            if (!user) {
+                const sessionId = searchParams.get('session_id');
+                if (!sessionId) return;
+                try {
+                    const res = await fetch(`/api/merchant/by-session?session_id=${encodeURIComponent(sessionId)}`);
+                    const data = await res.json();
+                    if (res.ok && data.merchantId) {
+                        setMerchantId(data.merchantId);
+                        setBuyerEmail(data.email || '');
+                        if (data.brandName) setBrandName(data.brandName);
+                    } else {
+                        setLookupError(data.error || 'Could not find your account.');
+                    }
+                } catch {
+                    setLookupError('Could not reach emode. Check your connection and refresh.');
+                }
+                return;
+            }
+
             if (user) {
+                setSignedIn(true);
+                setBuyerEmail(user.email || '');
                 const { data: merchant } = await supabase
                     .from('merchants')
                     .select('id, brand_name')
@@ -97,8 +128,12 @@ export default function OnboardingPage() {
                 <p className="text-charcoal/40 mb-12">
                     Let's get your virtual try-on widget set up in under 2 minutes.
                 </p>
+                {/* Naming the brand writes to the merchants table, which RLS blocks
+                    for a buyer who has not signed in yet. Sending them into a step
+                    that cannot save would be worse than skipping it — the name is
+                    editable later in Settings. */}
                 <button
-                    onClick={() => setStep('brand')}
+                    onClick={() => setStep(signedIn ? 'brand' : 'install')}
                     className="btn-generate px-8 py-4 text-sm font-bold uppercase tracking-widest inline-flex items-center gap-3"
                 >
                     Let's Go <ArrowRight className="w-4 h-4" />
@@ -157,10 +192,37 @@ export default function OnboardingPage() {
                 Paste this single line of code into your website's HTML, just before the closing <code className="bg-black/5 px-2 py-1 rounded text-sm">&lt;/body&gt;</code> tag.
             </p>
 
+            {lookupError && (
+                <div className="mb-8 p-5 rounded-2xl bg-red-50 border border-red-100 text-sm text-red-700">
+                    {lookupError}{' '}
+                    <Link href="/login" className="underline font-bold">Sign in</Link> with the email
+                    you paid with to get your key.
+                </div>
+            )}
+
             {/* Code Block */}
             <div className="mb-8">
                 <WidgetInstallCode merchantId={merchantId || ''} />
             </div>
+
+            {/* Paying does not create a login, so a merchant can be correctly
+                installed and still have no way back to their own dashboard. */}
+            {merchantId && !signedIn && (
+                <div className="mb-12 p-6 rounded-2xl bg-white border border-black/5">
+                    <h4 className="font-bold text-sm mb-2">Create your account</h4>
+                    <p className="text-sm text-charcoal/50 mb-4">
+                        Your widget works right now without one. Sign in with
+                        {buyerEmail ? <b> {buyerEmail}</b> : ' the email you paid with'} to see try-on
+                        counts, conversion and revenue, and to manage your plan.
+                    </p>
+                    <Link
+                        href="/login"
+                        className="inline-flex items-center gap-2 px-6 py-3 bg-obsidian text-white rounded-xl text-xs font-bold uppercase tracking-widest hover:bg-black transition-colors"
+                    >
+                        Sign in <ArrowRight className="w-4 h-4" />
+                    </Link>
+                </div>
+            )}
 
             {/* Platform Instructions */}
             <div className="grid grid-cols-1 md:grid-cols-3 gap-6 mb-12">

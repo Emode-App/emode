@@ -69,9 +69,14 @@ export async function POST(request: Request) {
                 ? { subscription_data: { metadata: { planId, userId: userId || '' } } }
                 : {}),
             // Merchant plans land in onboarding; consumer plans have no merchant flow.
+            // session_id lets onboarding find the merchant that was just created for
+            // a buyer who has no emode account yet. Without it the install step has
+            // no way to know who they are and hands out a snippet reading
+            // YOUR_MERCHANT_ID, which is the single most likely moment for a new
+            // merchant to give up.
             success_url: planConfig.subjectType === 'user'
                 ? `${origin}/?checkout=success&plan=${planId}`
-                : `${origin}/admin/onboarding?checkout=success&plan=${planId}`,
+                : `${origin}/admin/onboarding?checkout=success&plan=${planId}&session_id={CHECKOUT_SESSION_ID}`,
             cancel_url: `${origin}/?checkout=cancelled`,
         });
 

@@ -27,12 +27,31 @@ export async function getMerchantForUser() {
 
     if (merchant) return merchant;
 
-    // Fallback: find by email
+    // Fallback: find by email. This is how a merchant created by the Stripe
+    // webhook is found when the buyer paid before they had an emode account —
+    // the webhook stores their email as shop_domain and leaves owner_user_id null.
     const { data: merchantByEmail } = await serviceClient
         .from('merchants')
         .select('*')
         .eq('shop_domain', user.email || '')
         .single();
+
+    if (!merchantByEmail) return null;
+
+    // Claim it on the first visit, so the merchant is genuinely owned rather than
+    // depending on an email string matching forever. Otherwise owner_user_id stays
+    // null for the whole life of the account, and anything keyed on it — RLS
+    // policies, ownership checks — quietly treats the merchant as unowned.
+    if (!merchantByEmail.owner_user_id) {
+        const { error } = await serviceClient
+            .from('merchants')
+            .update({ owner_user_id: user.id })
+            .eq('id', merchantByEmail.id)
+            .is('owner_user_id', null); // Never take an account someone already owns.
+
+        if (error) console.error('[admin] Could not claim merchant for user:', error.message);
+        else merchantByEmail.owner_user_id = user.id;
+    }
 
     return merchantByEmail;
 }
