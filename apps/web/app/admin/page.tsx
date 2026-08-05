@@ -58,13 +58,19 @@ async function getTopProducts(merchantId?: string) {
 
     if (!products || products.length === 0) return [];
 
+    // Counted from generation_products, not generations.product_id.
+    //
+    // generations holds one product_id — the page the modal was opened from — so
+    // trying a jacket and jeans on together credited the jacket and left the
+    // jeans reading zero try-ons, on the merchant's own dashboard, beside a
+    // picture of the jeans. Combining pieces is the point of the dressing room,
+    // and it was the one thing the analytics could not see.
     const productStats = await Promise.all(
         products.map(async (product) => {
-            const genQ = serviceClient
-                .from('generations')
+            const { count } = await serviceClient
+                .from('generation_products')
                 .select('*', { count: 'exact', head: true })
                 .eq('product_id', product.id);
-            const { count } = await genQ;
             return { ...product, tryOnCount: count || 0 };
         })
     );

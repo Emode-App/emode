@@ -12,6 +12,8 @@ interface DressingItem {
     title: string;
     image: string;
     price: string;
+    /** The product page it came from — how the server identifies it later. */
+    url?: string;
 }
 
 /* ------------------------------------------------------------------ *
@@ -288,6 +290,10 @@ export function ModalContent({ initialProduct, onClose }: ModalContentProps) {
         }
     };
 
+    // The pieces this generation will actually use. handleGenerate already sent
+    // these; nothing in the interface said so.
+    const selectedItems = dressingRoomItems.filter((i) => selectedIds.includes(i.id));
+
     const handleGenerate = async () => {
         if (!image) return;
         setGenerating(true);
@@ -305,14 +311,24 @@ export function ModalContent({ initialProduct, onClose }: ModalContentProps) {
                 },
                 body: JSON.stringify({
                     userImage: image,
-                    productImages: selectedIds.length > 0
-                        ? dressingRoomItems.filter(i => selectedIds.includes(i.id)).map(i => i.image)
+                    productImages: selectedItems.length > 0
+                        ? selectedItems.map(i => i.image)
                         : [product.image],
                     title: product.title,
                     // Carried through so the server can build a catalogue for
                     // widget merchants, who have no product sync of their own.
                     price: product.price,
                     productUrl: searchParams.get('url') || undefined,
+                    // Every piece in the look. The server records a try-on
+                    // against each of them, not only the page the modal opened
+                    // from — the dressing room exists to combine pieces, so
+                    // crediting one of them makes the rest look untouched.
+                    items: selectedItems.map((i) => ({
+                        title: i.title,
+                        image: i.image,
+                        price: i.price,
+                        url: i.url,
+                    })),
                     merchantId,
                     productId: platformProductId || undefined,
                     visitorId: visitorId || undefined,
@@ -365,7 +381,7 @@ export function ModalContent({ initialProduct, onClose }: ModalContentProps) {
             // image string depending on whether it came through as a URL or as a
             // handed-over data URL, and re-adding it would duplicate the card.
             if (prev.some(item => item.title === product.title || item.image === product.image)) return prev;
-            return [...prev, { ...product, id: crypto.randomUUID() }];
+            return [...prev, { ...product, url: searchParams.get('url') || undefined, id: crypto.randomUUID() }];
         });
         setActiveTab('dressing-room');
 
@@ -541,18 +557,51 @@ export function ModalContent({ initialProduct, onClose }: ModalContentProps) {
 
                         {/* Sidebar Controls */}
                         <aside className="w-full md:w-[400px] border-l border-black/5 p-8 flex flex-col gap-8 bg-white overflow-y-auto">
-                            <div>
-                                <span className="text-[10px] uppercase tracking-[0.2em] font-bold text-accent-gold mb-3 block">Viewing Product</span>
-                                <div className="flex gap-4 items-center mb-6">
-                                    <div className="w-20 h-24 rounded-lg bg-off-white overflow-hidden shadow-sm">
-                                        <img src={product.image} className="w-full h-full object-cover" alt={product.title} />
+                            {/* Show what is actually going into the generation.
+                                Selecting two pieces and pressing "Try Together"
+                                did send both — but this panel still showed the
+                                single product whose page you happened to be on,
+                                so there was no way to tell what you were about
+                                to get, and the second piece looked ignored. */}
+                            {selectedItems.length > 0 ? (
+                                <div>
+                                    <span className="text-[10px] uppercase tracking-[0.2em] font-bold text-accent-gold mb-3 block">
+                                        Trying On · {selectedItems.length} pieces
+                                    </span>
+                                    <div className="flex flex-col gap-3 mb-6">
+                                        {selectedItems.map((item) => (
+                                            <div key={item.id} className="flex gap-4 items-center">
+                                                <div className="w-16 h-20 rounded-lg bg-off-white overflow-hidden shadow-sm shrink-0">
+                                                    <img src={item.image} className="w-full h-full object-contain" alt={item.title} />
+                                                </div>
+                                                <div className="min-w-0">
+                                                    <h3 className="font-heading font-bold tracking-tight truncate">{item.title}</h3>
+                                                    <p className="text-sm font-medium text-charcoal/60">{item.price}</p>
+                                                </div>
+                                            </div>
+                                        ))}
                                     </div>
-                                    <div>
-                                        <h3 className="text-xl font-heading font-bold tracking-tight">{product.title}</h3>
-                                        <p className="text-lg font-medium text-charcoal/60">{product.price}</p>
+                                    <button
+                                        onClick={() => setSelectedIds([])}
+                                        className="text-xs font-bold uppercase tracking-widest text-charcoal/40 hover:text-charcoal transition-colors mb-2"
+                                    >
+                                        Clear selection
+                                    </button>
+                                </div>
+                            ) : (
+                                <div>
+                                    <span className="text-[10px] uppercase tracking-[0.2em] font-bold text-accent-gold mb-3 block">Viewing Product</span>
+                                    <div className="flex gap-4 items-center mb-6">
+                                        <div className="w-20 h-24 rounded-lg bg-off-white overflow-hidden shadow-sm">
+                                            <img src={product.image} className="w-full h-full object-contain" alt={product.title} />
+                                        </div>
+                                        <div>
+                                            <h3 className="text-xl font-heading font-bold tracking-tight">{product.title}</h3>
+                                            <p className="text-lg font-medium text-charcoal/60">{product.price}</p>
+                                        </div>
                                     </div>
                                 </div>
-                            </div>
+                            )}
 
                             <div className="flex flex-col gap-3">
                                 <button
@@ -560,7 +609,11 @@ export function ModalContent({ initialProduct, onClose }: ModalContentProps) {
                                     disabled={!image || generating}
                                     className="btn-generate py-5 flex items-center justify-center gap-3 font-bold tracking-widest uppercase text-sm disabled:opacity-50"
                                 >
-                                    {generating ? 'Processing...' : 'Try This On'}
+                                    {generating
+                                        ? 'Processing...'
+                                        : selectedItems.length > 1
+                                            ? `Try ${selectedItems.length} Together`
+                                            : 'Try This On'}
                                 </button>
                                 <button
                                     onClick={handleAddToDressingRoom}

@@ -204,6 +204,8 @@ async function recordGeneration(opts: {
     title?: string | null;
     price?: string | null;
     url?: string | null;
+    // Every piece in the look, when the shopper combined several.
+    items?: CapturedProduct[];
 }) {
     try {
         const productId = await resolveProductId(opts.merchantId, opts.productRef, {
@@ -213,7 +215,7 @@ async function recordGeneration(opts: {
             url: opts.url,
         });
 
-        await supabase.from('generations').insert({
+        const { data: generation } = await supabase.from('generations').insert({
             user_id: opts.userId || null,
             merchant_id: opts.merchantId || null,
             product_id: productId,
@@ -224,7 +226,29 @@ async function recordGeneration(opts: {
             mode: opts.productImages.length > 1 ? 'outfit' : 'single',
             input_product_image_url: opts.productImages[0] || null,
             status: 'succeeded',
-        });
+        }).select('id').single();
+
+        // Credit every garment in the look, not only the page the modal opened
+        // from. generations keeps one row — one generation is one generation for
+        // billing — while generation_products records the full set, which is what
+        // per-product try-on counts are read from.
+        if (generation?.id) {
+            const ids = new Set<string>();
+            if (productId) ids.add(productId);
+
+            for (const item of opts.items || []) {
+                const id = await resolveOrCaptureProduct(supabase, opts.merchantId, item);
+                if (id) ids.add(id);
+            }
+
+            if (ids.size) {
+                const { error } = await supabase.from('generation_products').upsert(
+                    [...ids].map((product_id) => ({ generation_id: generation.id, product_id })),
+                    { onConflict: 'generation_id,product_id', ignoreDuplicates: true }
+                );
+                if (error) console.error('[API/Generate] generation_products failed:', error.message);
+            }
+        }
     } catch (err) {
         // Analytics must never fail the user's try-on.
         console.error('[API/Generate] Failed to record generation:', err);
@@ -329,6 +353,7 @@ export async function POST(request: Request) {
                 title: typeof body.title === 'string' ? body.title : null,
                 price: typeof body.price === 'string' ? body.price : null,
                 url: typeof body.productUrl === 'string' ? body.productUrl : null,
+                items: Array.isArray(body.items) ? body.items.slice(0, 20) : [],
             });
         }
 
