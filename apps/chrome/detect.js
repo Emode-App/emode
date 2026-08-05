@@ -69,7 +69,7 @@
                 const price = offers && (offers.price != null ? offers.price : offers.lowPrice);
                 const currency = offers && offers.priceCurrency;
 
-                if (node.name && imageUrl) {
+                if (node.name && imageUrl && looksLikeProductImage(String(imageUrl))) {
                     return {
                         title: String(node.name).trim(),
                         image: absoluteUrl(String(imageUrl)),
@@ -85,7 +85,23 @@
         return null;
     }
 
-    /** Tier 2: OpenGraph / product meta tags. */
+    // Images that are furniture, not merchandise. A favicon or a logo passes
+    // every size and presence check while being useless to generate from.
+    const NON_PRODUCT_IMAGE_RE = /favicon|sprite|logo|placeholder|\/icons?\/|1x1|pixel|spacer|avatar/i;
+
+    function looksLikeProductImage(url) {
+        return Boolean(url) && !NON_PRODUCT_IMAGE_RE.test(url);
+    }
+
+    /**
+     * Tier 2: OpenGraph / product meta tags.
+     *
+     * Requires evidence the page is about ONE product. Title-plus-image alone is
+     * not that: many sites serve identical site-level og tags on every page, so
+     * the check passed on a homepage and produced a "product" named after the
+     * store, illustrated with its favicon. og:type, a price, or a buy control —
+     * any one will do, but not none.
+     */
     function fromOpenGraph() {
         const meta = (prop) => {
             const el = document.querySelector(`meta[property="${prop}"], meta[name="${prop}"]`);
@@ -95,9 +111,13 @@
         const title = meta('og:title');
         const image = meta('og:image');
         if (!title || !image) return null;
+        if (!looksLikeProductImage(image)) return null;
 
         const amount = meta('product:price:amount') || meta('og:price:amount');
         const currency = meta('product:price:currency') || meta('og:price:currency');
+
+        const isProductType = String(meta('og:type') || '').toLowerCase().includes('product');
+        if (!isProductType && !amount && !findCartButton()) return null;
 
         return {
             title: title.trim(),
@@ -142,6 +162,7 @@
     function imageCandidates(scope) {
         return Array.from((scope || document).querySelectorAll('img'))
             .filter((img) => img.offsetParent !== null && img.naturalWidth > 150)
+            .filter((img) => looksLikeProductImage(img.currentSrc || img.src))
             .map((img) => {
                 const r = img.getBoundingClientRect();
                 return { src: img.currentSrc || img.src, area: r.width * r.height };

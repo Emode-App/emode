@@ -115,7 +115,7 @@ function fromJsonLd(): ProductContext | null {
             const price = offers?.price ?? offers?.lowPrice;
             const currency = offers?.priceCurrency;
 
-            if (node.name && imageUrl) {
+            if (node.name && imageUrl && looksLikeProductImage(String(imageUrl))) {
                 return {
                     title: String(node.name).trim(),
                     image: absoluteUrl(String(imageUrl)),
@@ -139,12 +139,19 @@ function fromOpenGraph(): ProductContext | null {
     const title = meta('og:title');
     const image = meta('og:image');
     if (!title || !image) return null;
+    if (!looksLikeProductImage(image)) return null;
 
     const amount = meta('product:price:amount') || meta('og:price:amount');
     const currency = meta('product:price:currency') || meta('og:price:currency');
 
-    // og:type is a strong signal, but plenty of custom sites omit it — treat it
-    // as confirmation rather than a requirement.
+    // Requires evidence the page is about ONE product. Title-plus-image alone is
+    // not that: many stores serve identical site-level og tags on every page, so
+    // this passed on a homepage and produced a "product" named after the store,
+    // illustrated with its favicon. Observed on therealreal.com. og:type, a
+    // price, or a buy control — any one will do, but not none.
+    const isProductType = String(meta('og:type') || '').toLowerCase().includes('product');
+    if (!isProductType && !amount && !findCartButton()) return null;
+
     return {
         title: title.trim(),
         image: absoluteUrl(image),
@@ -153,7 +160,19 @@ function fromOpenGraph(): ProductContext | null {
     };
 }
 
-const CART_BUTTON_RE = /add to (cart|bag|basket)|add-to-cart|addtocart|buy now|purchase/i;
+// Deliberately broad. Luxury sites in particular gate the cart behind size
+// selection, so the visible control reads "Select size" until a size is chosen —
+// Gucci's product pages have no "add to bag" button at all until then.
+const CART_BUTTON_RE =
+    /add to (cart|bag|basket)|add-to-cart|addtocart|buy now|purchase|select size|choose size|pick a size|add to my|shop now/i;
+
+// Images that are furniture, not merchandise. A favicon or a logo passes every
+// size and presence check while being useless to generate from.
+const NON_PRODUCT_IMAGE_RE = /favicon|sprite|logo|placeholder|\/icons?\/|1x1|pixel|spacer|avatar/i;
+
+function looksLikeProductImage(url: string | null | undefined): boolean {
+    return Boolean(url) && !NON_PRODUCT_IMAGE_RE.test(url as string);
+}
 
 /** Find the merchant's own add-to-cart control — the best anchor on any site. */
 function findCartButton(): HTMLElement | null {
@@ -189,6 +208,7 @@ const PRICE_RE = /(?:[$£€¥]|USD|EUR|GBP)\s?\d[\d.,]*/;
 function largestImage(scope: ParentNode): string | undefined {
     const best = Array.from(scope.querySelectorAll('img'))
         .filter((img) => img.offsetParent !== null && img.naturalWidth > 150)
+        .filter((img) => looksLikeProductImage(img.currentSrc || img.src))
         .map((img) => {
             const r = img.getBoundingClientRect();
             return { img, area: r.width * r.height };

@@ -756,12 +756,22 @@ function openModal(context) {
 }
 
 function injectButtons() {
+    const urlChanged = lastScannedUrl !== window.location.href;
+    const existing = document.querySelector('.emode-extension-injected');
+
+    // A different page means the previous product's buttons are stale.
+    if (urlChanged && existing) existing.remove();
+
     if (!isPDP()) {
-        const existing = document.querySelector('.emode-extension-injected');
-        if (existing) existing.remove();
+        // Deliberately NOT removing anything here. Detection failing on this
+        // pass is not evidence the product left the page — mid-render, an image
+        // still decoding, or a framework swapping a subtree all produce a
+        // momentary false, and tearing the buttons out on one is what made them
+        // flicker and disappear on every real SPA storefront.
         return;
     }
 
+    lastScannedUrl = window.location.href;
     if (document.querySelector('.emode-extension-injected')) return;
 
     const keywords = ['ADD TO', 'ADD', 'BAG', 'TOTE', 'BASKET', 'BUY', 'BUY NOW', 'CHECKOUT', 'PURCHASE'];
@@ -907,10 +917,60 @@ function injectButtons() {
     targetBtn.parentNode.insertBefore(btnGroup, targetBtn);
 }
 
-// Observe DOM
-const observer = new MutationObserver(() => injectButtons());
+/* ------------------------------------------------------------------ *
+ * Scan scheduling
+ *
+ * This ran injectButtons() on EVERY DOM mutation, and injectButtons() deletes
+ * the buttons the moment isPDP() returns false. On a storefront that is a
+ * static document that is merely wasteful. On a live SPA — StockX with its
+ * ticking prices, The RealReal with its gallery — it is hundreds of full
+ * detections per second, and a single transient false removes the buttons. That
+ * is the "appeared for a second, then vanished": detection blinked while an
+ * image was mid-swap, the buttons were torn out, and no later mutation happened
+ * to put them back. Injecting is itself a mutation, so it also re-triggered
+ * itself.
+ *
+ * Now: coalesce mutations into one scan per frame, and treat absence as
+ * inconclusive rather than as proof. Buttons are only removed when the page
+ * genuinely becomes a different page, which for an SPA means the URL changing.
+ * ------------------------------------------------------------------ */
+let scanQueued = false;
+let lastScannedUrl = '';
+
+function scheduleScan() {
+    if (scanQueued) return;
+    scanQueued = true;
+    requestAnimationFrame(() => {
+        scanQueued = false;
+        try {
+            injectButtons();
+        } catch (err) {
+            console.warn('[emodeAI] scan failed:', err);
+        }
+    });
+}
+
+const observer = new MutationObserver(scheduleScan);
 observer.observe(document.body, { childList: true, subtree: true });
-injectButtons();
+
+// SPA route changes do not reload the page, and these sites navigate between
+// products without one. Re-scan shortly after, once the new product has
+// rendered.
+for (const method of ['pushState', 'replaceState']) {
+    const original = history[method];
+    history[method] = function (...args) {
+        const result = original.apply(this, args);
+        setTimeout(scheduleScan, 300);
+        return result;
+    };
+}
+window.addEventListener('popstate', () => setTimeout(scheduleScan, 300));
+
+// Product data frequently arrives after first paint — JSON-LD injected by the
+// framework, images still decoding. Give detection a few more looks.
+scheduleScan();
+setTimeout(scheduleScan, 800);
+setTimeout(scheduleScan, 2000);
 
 // Floating Pill Logic (Catalog only)
 document.addEventListener('mouseover', (e) => {
