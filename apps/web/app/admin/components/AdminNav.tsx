@@ -2,7 +2,7 @@
 
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
-import { LayoutDashboard, Package, Code2, BarChart3, Settings } from 'lucide-react';
+import { LayoutDashboard, Package, Code2, BarChart3, Settings, Sparkles } from 'lucide-react';
 
 /**
  * Sidebar navigation.
@@ -14,6 +14,7 @@ import { LayoutDashboard, Package, Code2, BarChart3, Settings } from 'lucide-rea
 const LINKS = [
     { href: '/admin', label: 'Overview', icon: LayoutDashboard, exact: true },
     { href: '/admin/products', label: 'Products', icon: Package },
+    { href: '/admin/studio', label: 'Studio', icon: Sparkles },
     { href: '/admin/install', label: 'Install Widget', icon: Code2 },
     { href: '/admin/analytics', label: 'Analytics', icon: BarChart3 },
 ];
