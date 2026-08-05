@@ -49,17 +49,33 @@ export function tierLabel(count: number): string {
  */
 const ALPHABET = '0123456789ABCDEFGHJKMNPQRSTVWXYZ';
 
-/** Normalise user input before lookup. */
+const PREFIX = 'EMODE';
+
+/**
+ * Normalise user input before lookup.
+ *
+ * The confusable mapping must run over the BODY only. Applied to the whole
+ * string it rewrites the prefix too — EMODE contains an O, so every code
+ * normalised to EM0DE… and matched nothing. That is not a rare edge case, it is
+ * every code, and it would have shipped as a batch of a thousand codes that
+ * cannot be redeemed.
+ *
+ * The prefix is matched loosely on the way in, so someone who types EM0DE
+ * because that is what they see in a sans-serif font still gets through.
+ */
 export function normaliseCode(raw: string): string {
-    return String(raw || '')
-        .toUpperCase()
-        .replace(/[^0-9A-Z]/g, '')
-        // The four characters the alphabet omits are exactly the four people
-        // confuse, so map them to what the writer meant rather than rejecting.
+    const cleaned = String(raw || '').toUpperCase().replace(/[^0-9A-Z]/g, '');
+    const body = cleaned.replace(/^EM[O0]DE/, '');
+
+    // The four characters the alphabet omits are exactly the four people
+    // confuse, so map them to what the writer meant rather than rejecting.
+    const fixed = body
         .replace(/I/g, '1')
         .replace(/L/g, '1')
         .replace(/O/g, '0')
         .replace(/U/g, 'V');
+
+    return PREFIX + fixed;
 }
 
 /** Group into readable quads: EMODEXXXXXXXXXXXX -> EMODE-XXXX-XXXX-XXXX */
