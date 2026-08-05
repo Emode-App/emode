@@ -689,7 +689,7 @@ function extractProductContext() {
         title,
         price: priceText,
         image: mainImage?.substring(0, 80),
-        imageCount: images.length
+        imageCount: onPage.length
     });
     console.groupEnd();
     return { title, image: mainImage, price: priceText, alternateImages };
@@ -774,44 +774,17 @@ function injectButtons() {
     lastScannedUrl = window.location.href;
     if (document.querySelector('.emode-extension-injected')) return;
 
-    const keywords = ['ADD TO', 'ADD', 'BAG', 'TOTE', 'BASKET', 'BUY', 'BUY NOW', 'CHECKOUT', 'PURCHASE'];
-    const selectors = [
-        'button[name="add"]',
-        '.add-to-cart',
-        '#add-to-cart',
-        '.product-form__submit',
-        '[class*="AddToCart"]',
-        '[id*="AddToCart"]',
-        'button.primary',
-        '.btn-primary'
-    ];
+    // Placement comes from detect.js, the same module that decided this IS a
+    // product page. These were separate before: detection was rewritten to use
+    // JSON-LD, while placement kept its own scan for a button whose text
+    // contained "ADD TO"/"BAG"/"BUY". So on Gucci the detector was certain and
+    // the placer found nothing, and no buttons appeared on a page we had fully
+    // identified. One source of truth, one answer.
+    const detectApi = global_detect();
+    const anchor = detectApi ? detectApi.findAnchor() : null;
+    if (!anchor) return;
 
-    let targetBtn = null;
-
-    for (const selector of selectors) {
-        const el = document.querySelector(selector);
-        if (el && el.offsetWidth > 0 && el.offsetHeight > 0) {
-            const text = el.textContent.toUpperCase();
-            if (keywords.some(k => text.includes(k))) {
-                targetBtn = el;
-                break;
-            }
-        }
-    }
-
-    if (!targetBtn) {
-        const buttons = Array.from(document.querySelectorAll('button, a.button, a.btn, [role="button"]'));
-        for (const btn of buttons) {
-            const text = btn.textContent.trim().toUpperCase();
-            const rect = btn.getBoundingClientRect();
-            if (rect.width > 100 && rect.height > 30 && keywords.some(k => text === k || text.startsWith(k + ' ') || text.includes(' ' + k))) {
-                targetBtn = btn;
-                break;
-            }
-        }
-    }
-
-    if (!targetBtn) return;
+    const targetBtn = anchor.el;
 
     notifyProductDetected(extractProductContext());
 
@@ -914,7 +887,11 @@ function injectButtons() {
 
     btnGroup.appendChild(tryBtn);
     btnGroup.appendChild(dressBtn);
-    targetBtn.parentNode.insertBefore(btnGroup, targetBtn);
+    if (anchor.position === 'after') {
+        targetBtn.parentNode.insertBefore(btnGroup, targetBtn.nextSibling);
+    } else {
+        targetBtn.parentNode.insertBefore(btnGroup, targetBtn);
+    }
 }
 
 /* ------------------------------------------------------------------ *
@@ -940,14 +917,22 @@ let lastScannedUrl = '';
 function scheduleScan() {
     if (scanQueued) return;
     scanQueued = true;
-    requestAnimationFrame(() => {
+    // setTimeout, not requestAnimationFrame: rAF does not fire while a tab is
+    // not compositing, so a product opened in a background tab — a link from a
+    // newsletter, a middle-click from a listing page — would sit there with no
+    // buttons until it happened to be focused. 100ms still coalesces the bursts
+    // a live SPA produces.
+    setTimeout(() => {
         scanQueued = false;
         try {
             injectButtons();
         } catch (err) {
+            // One thrown scan used to be fatal for every site: extractProductContext
+            // referenced a variable that no longer existed, injectButtons threw
+            // before inserting anything, and the buttons vanished everywhere.
             console.warn('[emodeAI] scan failed:', err);
         }
-    });
+    }, 100);
 }
 
 const observer = new MutationObserver(scheduleScan);

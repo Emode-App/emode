@@ -135,19 +135,37 @@
     const CART_BUTTON_RE =
         /add to (cart|bag|basket)|add-to-cart|addtocart|buy now|purchase|select size|choose size|pick a size|add to my|shop now/i;
 
-    function findCartButton() {
-        const explicit = document.querySelector(
-            'button[name="add"], .add-to-cart, .product-form__submit, [data-add-to-cart], ' +
-            'form[action*="/cart/add"] button, [data-testid*="add-to"], [class*="AddToCart"], [class*="add-to-bag"]'
-        );
-        if (explicit) return explicit;
+    /** Is this element actually a clickable control a shopper can see? */
+    function isUsableControl(el) {
+        if (!el || el.offsetParent === null) return false;
+        const r = el.getBoundingClientRect();
+        return r.width >= 60 && r.height >= 20;
+    }
 
-        const clickable = document.querySelectorAll('button, a[role="button"], input[type="submit"]');
+    /**
+     * The merchant's own buy control — the best anchor on any storefront.
+     *
+     * Text is checked before class names. A selector like [class*="add-to-bag"]
+     * matches the icon-only bag in a site header just as happily as the real
+     * control, and anchoring to that puts the try-on buttons in the navigation.
+     * Requiring real text, then real size, keeps the header out of it.
+     */
+    function findCartButton() {
+        const clickable = document.querySelectorAll(
+            'button, a[role="button"], input[type="submit"], [role="button"]'
+        );
         for (const el of Array.from(clickable)) {
             const label = (el.textContent || el.value || '').trim();
-            if (label && CART_BUTTON_RE.test(label) && el.offsetParent !== null) return el;
+            if (label && CART_BUTTON_RE.test(label) && isUsableControl(el)) return el;
         }
-        return null;
+
+        // Only then fall back to structure, and still require a real control.
+        const explicit = Array.from(document.querySelectorAll(
+            'button[name="add"], .add-to-cart, .product-form__submit, [data-add-to-cart], ' +
+            'form[action*="/cart/add"] button, [data-testid*="add-to"], [class*="AddToCart"]'
+        )).find(isUsableControl);
+
+        return explicit || null;
     }
 
     /**
@@ -241,7 +259,29 @@
         return detectProduct() !== null;
     }
 
+    /**
+     * Where the try-on buttons should go.
+     *
+     * The buy control when there is one. When there is not — and on a luxury
+     * site there often is not until a size is chosen — the product heading. A
+     * page can be confidently identified as a product page through JSON-LD and
+     * still contain no button matching any keyword, which is exactly Gucci: the
+     * old placement scan gave up there and no buttons appeared on a page the
+     * detector was certain about.
+     */
+    function findAnchor() {
+        const cart = findCartButton();
+        if (cart) return { el: cart, position: 'before' };
+
+        const heading = document.querySelector('h1');
+        if (heading && heading.offsetParent !== null) return { el: heading, position: 'after' };
+
+        return null;
+    }
+
     global.emodeDetect = {
+        findAnchor,
+        isUsableControl,
         detectProduct,
         isProductPage,
         findCartButton,
