@@ -16,10 +16,10 @@ import { Sparkles, Users, Tag, Scissors, ArrowRight, Check } from 'lucide-react'
  */
 
 const SCREENS = [
-    { src: '/app/01-feed.jpg', alt: 'The emode feed: an outfit post tagged with the brands worn' },
-    { src: '/app/02-tryon.jpg', alt: 'AI try-on: two secondhand items rendered onto a person as one outfit' },
-    { src: '/app/03-shop.jpg', alt: 'Tapping a post reveals the exact pieces in it, with prices and links' },
-    { src: '/app/04-sell.jpg', alt: 'A profile selling listings directly, with sizes, condition and prices' },
+    { src: '/app/01-feed.jpg', alt: 'The emode feed: an outfit post tagged with the brands worn', tilt: '-rotate-2' },
+    { src: '/app/02-tryon.jpg', alt: 'AI try-on: two secondhand items rendered onto a person as one outfit', tilt: 'rotate-1' },
+    { src: '/app/03-shop.jpg', alt: 'Tapping a post reveals the exact pieces in it, with prices and links', tilt: '-rotate-1' },
+    { src: '/app/04-sell.jpg', alt: 'A profile selling listings directly, with sizes, condition and prices', tilt: 'rotate-2' },
 ];
 
 const PILLARS = [
@@ -131,11 +131,13 @@ export function ConsumerApp() {
                     and describing it in prose to someone who has not seen it asks
                     them to take the whole thing on faith.
 
-                    No captions here: these carry their own headlines, and a second
-                    label underneath would either repeat them or argue with them.
-                    Horizontal scroll on narrow screens rather than a 4-up grid
-                    that crushes each phone to a thumbnail. */}
-                <div className="-mx-6 px-6 mb-20 overflow-x-auto">
+                    No border: these are already cards on a cream ground, and a
+                    white hairline around each one reads as a rendering artefact
+                    rather than a frame. Depth comes from the shadow.
+
+                    Tilted, and straightening on hover. Vertical padding on the
+                    scroller so the rotated corners are not clipped by it. */}
+                <div className="-mx-6 px-6 py-6 mb-16 overflow-x-auto">
                     <div className="flex gap-5 min-w-max sm:min-w-0 sm:grid sm:grid-cols-2 lg:grid-cols-4">
                         {SCREENS.map((s) => (
                             /* eslint-disable-next-line @next/next/no-img-element */
@@ -144,7 +146,7 @@ export function ConsumerApp() {
                                 src={s.src}
                                 alt={s.alt}
                                 loading="lazy"
-                                className="w-64 sm:w-full rounded-2xl border border-white/10 shadow-2xl"
+                                className={`w-64 sm:w-full rounded-2xl shadow-2xl transition-transform duration-500 ease-out hover:rotate-0 hover:scale-[1.03] ${s.tilt}`}
                             />
                         ))}
                     </div>
