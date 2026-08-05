@@ -198,7 +198,11 @@ function isCatalogPage() {
 // A product card is a picture you can click to buy the thing in it. Editorial
 // photography, hero banners, lookbook stills and article thumbnails are not,
 // however much they look alike.
-const PRODUCT_HREF_RE = /\/(products?|p|item|items|dp|sku|prod|listing|shop\/[^/]+\/[^/]+)(\/|\?|$)/i;
+// Product URLs, as actually written in the wild. Gucci alone uses /pr/ for the
+// path and hangs the style code off the end as "-p-8202981ABAP9754", matching
+// neither /product/ nor /p/.
+const PRODUCT_HREF_RE =
+    /\/(products?|pr|p|item|items|dp|sku|prod|listing)(\/|\?|$)|-p-[a-z0-9]{4,}|-(\d{5,})(\/|\?|$)/i;
 const EDITORIAL_HREF_RE = /\/(stories|story|blog|article|news|guides?|lookbook|editorial|magazine|journal|about|help|careers)(\/|\?|$)/i;
 
 function isValidProductCard(img) {
@@ -1088,7 +1092,14 @@ setTimeout(scheduleScan, 2000);
 // Floating Pill Logic (Catalog only)
 document.addEventListener('mouseover', (e) => {
     // Disable pill on PDPs and non-catalog pages
-    if (isPDP() || !isCatalogPage()) return;
+    // Product cards, wherever they appear.
+    //
+    // This used to bail on any product page, so the "You may also like" rail at
+    // the bottom of a PDP — four more jackets, each its own listing — was the one
+    // place a shopper is most obviously shopping and the one place the pill was
+    // switched off. The page type is the wrong question; the card is checked
+    // directly by isValidProductCard, which is strict enough now to carry it.
+    if (isEmodeApp()) return;
 
     let target = e.target;
 

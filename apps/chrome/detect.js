@@ -283,10 +283,37 @@
         return w * h;
     }
 
+    /**
+     * Is this picture of something else entirely?
+     *
+     * Alternate views of one product are not links, or link back to the page you
+     * are on. A picture wrapped in a link to a DIFFERENT product page is a
+     * different product — a colourway strip, a "you may also like" rail, a
+     * recommendation. StockX renders five other Jordan 1 colourways directly
+     * under the title, and offering those as "wrong picture?" alternatives
+     * invites the shopper to try on a shoe from another listing entirely.
+     */
+    function linksElsewhere(img) {
+        const anchor = img.closest('a[href]');
+        if (!anchor) return false;
+
+        const href = anchor.getAttribute('href') || '';
+        if (!href || href.startsWith('#') || href.startsWith('javascript:')) return false;
+
+        try {
+            const target = new URL(href, window.location.href);
+            if (target.origin !== window.location.origin) return true;
+            return target.pathname.replace(/\/+$/, '') !== window.location.pathname.replace(/\/+$/, '');
+        } catch {
+            return false;
+        }
+    }
+
     function imageCandidates(scope) {
         return Array.from((scope || document).querySelectorAll('img'))
             .filter((img) => img.offsetParent !== null && img.naturalWidth > 150)
             .filter((img) => looksLikeProductImage(img.currentSrc || img.src))
+            .filter((img) => !linksElsewhere(img))
             .map((img) => {
                 const r = img.getBoundingClientRect();
                 return {
@@ -517,6 +544,7 @@
     }
 
     global.emodeDetect = {
+        linksElsewhere,
         findOverlay,
         fromScope,
         onScreenArea,
