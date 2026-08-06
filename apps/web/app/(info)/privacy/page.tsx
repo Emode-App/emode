@@ -148,10 +148,25 @@ export default function PrivacyPage() {
                     </p>
                     <p>
                         Page content is read <b>in your browser</b> and is not transmitted to us.
-                        Nothing leaves the device until you tap Try This On — at which point the
+                        Nothing leaves the device until you tap Try This On &mdash; at which point the
                         product title, image and price for that one item are sent, along with the
                         photograph you choose. We do not collect browsing history and we do not
                         record the pages you visit.
+                    </p>
+                    <p>
+                        Two things the extension does are worth calling out because they are not
+                        obvious. When you use a try-on button on a search results page, the
+                        extension fetches that product&rsquo;s own page in the background to get a
+                        full-size image, because search thumbnails are too small to try on well.
+                        That request goes to the shop, not to us, and it is sent{' '}
+                        <b>without your cookies</b>, so the shop cannot recognise you from it.
+                        And if you land on an order confirmation page at a shop you have saved
+                        items from, the extension marks those saved items as purchased. That
+                        happens entirely on your device &mdash; we are not told what you bought.
+                    </p>
+                    <p>
+                        Items you save are stored <b>in the browser</b>, not on our servers, and
+                        are removed when you remove them or clear the extension&rsquo;s data.
                     </p>
                 </Section>
 
