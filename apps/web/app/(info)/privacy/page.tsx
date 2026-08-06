@@ -170,7 +170,26 @@ export default function PrivacyPage() {
                     </p>
                 </Section>
 
-                <Section n={5} title="Who else processes your data">
+                <Section n={5} title="The visitor identifier, and consent">
+                    <p>
+                        To tell a merchant whether try-ons lead to purchases, emode stores an{' '}
+                        <b>opaque random value</b> in your browser on the merchant’s own domain.
+                        It is not derived from anything about you, is never used for advertising,
+                        and is never sold.
+                    </p>
+                    <p>
+                        On Shopify stores we ask Shopify’s Customer Privacy API before storing
+                        it, and delete it if consent is later withdrawn. Elsewhere the widget
+                        honours a browser’s <b>Global Privacy Control</b> signal, and merchants
+                        running their own consent banner can hold emode behind it.
+                    </p>
+                    <p>
+                        Refusing costs you nothing: the try-on works either way. It simply is not
+                        counted.
+                    </p>
+                </Section>
+
+                <Section n={6} title="Who else processes your data">
                     <div className="overflow-x-auto">
                         <table className="w-full text-sm min-w-[520px]">
                             <thead>
@@ -202,17 +221,20 @@ export default function PrivacyPage() {
                     </p>
                 </Section>
 
-                <Section n={6} title="How long we keep things">
+                <Section n={7} title="How long we keep things">
                     <ul className="space-y-2 list-disc ml-5 marker:text-charcoal/30">
                         <li><b>Uploaded photographs</b> — not retained after the request.</li>
                         <li><b>Generated images</b> — not stored.</li>
                         <li><b>Try-on records</b> — kept while the merchant&apos;s account is active, for their analytics.</li>
+                        <li><b>Order attribution records</b> — order id, total, currency
+                        and the product ids in the order, kept while the merchant&apos;s account
+                        is active. No customer name, email, phone or address is ever received.</li>
                         <li><b>Account and merchant records</b> — kept until deletion is requested.</li>
                         <li><b>Billing records</b> — kept as long as tax and accounting law requires.</li>
                     </ul>
                 </Section>
 
-                <Section n={7} title="Your rights">
+                <Section n={8} title="Your rights">
                     <p>
                         Depending on where you live you may have the right to access, correct,
                         export or delete your data, to object to processing, and to withdraw
@@ -232,7 +254,7 @@ export default function PrivacyPage() {
                     </p>
                 </Section>
 
-                <Section n={8} title="Children">
+                <Section n={9} title="Children">
                     <p>
                         emode is not intended for children under 13 and we do not knowingly
                         collect their data. If you believe a child has uploaded a photograph,
@@ -240,7 +262,7 @@ export default function PrivacyPage() {
                     </p>
                 </Section>
 
-                <Section n={9} title="Security">
+                <Section n={10} title="Security">
                     <p>
                         Data is encrypted in transit. Database access is restricted by row-level
                         security so one merchant cannot read another&apos;s data. Payment details
@@ -253,7 +275,7 @@ export default function PrivacyPage() {
                     </p>
                 </Section>
 
-                <Section n={10} title="Changes, and how to reach us">
+                <Section n={11} title="Changes, and how to reach us">
                     <p>
                         If this policy changes materially we will update the date above and, for
                         significant changes, notify merchants by email.

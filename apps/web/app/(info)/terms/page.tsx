@@ -213,7 +213,90 @@ export default function TermsPage() {
                     </p>
                 </Section>
 
-                <Section n={9} title="Changes to these terms">
+                <Section n={9} title="Data processing">
+                    <p>
+                        This section is the data processing agreement between us. It applies
+                        whenever emode handles personal data belonging to <b>your</b> customers
+                        &mdash; shoppers on your storefront &mdash; rather than to you.
+                    </p>
+                    <p>
+                        For that data you are the <b>controller</b> and we are the{' '}
+                        <b>processor</b>. You decide what is collected and why; we act on your
+                        instructions, which are these terms plus whatever you configure in the
+                        dashboard. We do not use your customers&apos; data for our own purposes,
+                        and we never sell it.
+                    </p>
+
+                    <h3 className="font-bold mt-6 mb-2">What we process on your behalf</h3>
+                    <ul className="space-y-2 list-disc ml-5 marker:text-charcoal/30">
+                        <li>
+                            <b>A visitor identifier</b> &mdash; an opaque random value stored in the
+                            shopper&apos;s browser on your domain, so a try-on can be matched to an
+                            order. It is not derived from anything about the person.
+                        </li>
+                        <li>
+                            <b>Try-on records</b> &mdash; which product, when, and that visitor
+                            identifier. Photographs are not retained after generation and generated
+                            images are not stored.
+                        </li>
+                        <li>
+                            <b>Order records</b> &mdash; order id, total, currency and the product
+                            ids in the order, for merchants using order attribution.{' '}
+                            <b>No customer names, email addresses, phone numbers or postal
+                            addresses are received or stored</b>, on any plan.
+                        </li>
+                    </ul>
+
+                    <h3 className="font-bold mt-6 mb-2">Consent</h3>
+                    <p>
+                        On Shopify we check Shopify&apos;s Customer Privacy API before storing the
+                        visitor identifier, and remove it if consent is later withdrawn. On other
+                        platforms the widget honours a browser&apos;s Global Privacy Control
+                        signal, and can be held behind your own consent banner with{' '}
+                        <code className="text-xs bg-black/5 px-1 py-0.5 rounded">
+                            data-emode-consent=&quot;deferred&quot;
+                        </code>{' '}
+                        and{' '}
+                        <code className="text-xs bg-black/5 px-1 py-0.5 rounded">
+                            window.emode.grantConsent()
+                        </code>.
+                        Where consent is refused, try-on still works &mdash; it is simply not
+                        attributed.
+                    </p>
+
+                    <h3 className="font-bold mt-6 mb-2">Our obligations</h3>
+                    <ul className="space-y-2 list-disc ml-5 marker:text-charcoal/30">
+                        <li>Process customer data only on your instructions, and only to provide emode.</li>
+                        <li>Keep it confidential, and require the same of anyone with access.</li>
+                        <li>Encrypt it in transit and at rest.</li>
+                        <li>
+                            Help you respond to a customer exercising their rights &mdash; access,
+                            correction, deletion, objection &mdash; within the time the law gives you.
+                        </li>
+                        <li>Tell you without undue delay if customer data is breached.</li>
+                        <li>
+                            Delete or return customer data when you close your account, subject to
+                            the retention periods in the{' '}
+                            <a href="/privacy" className="underline">privacy policy</a>.
+                        </li>
+                        <li>Give you the information you reasonably need to demonstrate compliance.</li>
+                    </ul>
+
+                    <h3 className="font-bold mt-6 mb-2">Sub-processors</h3>
+                    <p>
+                        We use the providers listed in the{' '}
+                        <a href="/privacy" className="underline">privacy policy</a>, which names
+                        each one and what it receives. That list is the authoritative one, and it
+                        changes when the code does. We will tell merchants by email before adding a
+                        sub-processor that handles customer data, and you may object.
+                    </p>
+                    <p>
+                        Where data leaves the region it was collected in, we rely on the standard
+                        contractual clauses our providers offer.
+                    </p>
+                </Section>
+
+                <Section n={10} title="Changes to these terms">
                     <p>
                         We may update these terms. The date above changes when we do, and for
                         material changes we will notify merchants by email. Continuing to use
@@ -221,7 +304,7 @@ export default function TermsPage() {
                     </p>
                 </Section>
 
-                <Section n={10} title="Contact">
+                <Section n={11} title="Contact">
                     <p>
                         <a href={`mailto:${SUPPORT_EMAIL}`} className="underline">{SUPPORT_EMAIL}</a>
                         {' '}— for questions about these terms, or anything else.

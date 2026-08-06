@@ -24,6 +24,15 @@ interface WidgetConfig {
     autoInject?: boolean;
     /** Override the emode origin. For emode's own development only. */
     host?: string;
+    /**
+     * When to start attributing.
+     *
+     * 'auto' (default) mints the visitor id on load unless the browser sends a
+     * Global Privacy Control signal. 'deferred' mints nothing until the site
+     * calls window.emode.grantConsent() — the setting for a store that runs its
+     * own consent banner and wants emode behind it.
+     */
+    consent?: 'auto' | 'deferred';
 }
 
 interface ProductContext {
@@ -46,6 +55,47 @@ const CONTAINER_CLASS = 'emode-integration-container';
  * anything stored there is invisible everywhere else on the site. Opaque
  * random value — no personal data — used only to join a try-on to an order.
  * ------------------------------------------------------------------ */
+/**
+ * Whether this browser has asked not to be tracked.
+ *
+ * Global Privacy Control is a real signal a real browser sends, and in several
+ * jurisdictions it is legally an opt-out rather than a preference. Unlike Do Not
+ * Track it is respected by regulation rather than by goodwill, so honouring it
+ * costs one line and is the difference between claiming to respect consent
+ * decisions and doing it.
+ *
+ * On Shopify the theme extension asks Shopify's Customer Privacy API instead.
+ * The widget runs on sites with no such API, so this plus an explicit
+ * grantConsent() hook is what a merchant has to work with.
+ */
+function browserOptedOut(): boolean {
+    try {
+        return (navigator as any).globalPrivacyControl === true;
+    } catch {
+        return false;
+    }
+}
+
+let consentGranted: boolean | null = null;
+
+function attributionAllowed(config: WidgetConfig): boolean {
+    if (consentGranted !== null) return consentGranted;
+    if (config.consent === 'deferred') return false;
+    return !browserOptedOut();
+}
+
+/**
+ * Read the stored id without creating one. Used wherever we need to know
+ * whether attribution is already running.
+ */
+function readVisitorId(): string | null {
+    try {
+        return localStorage.getItem(VISITOR_KEY);
+    } catch {
+        return null;
+    }
+}
+
 function getVisitorId(): string | null {
     try {
         let id = localStorage.getItem(VISITOR_KEY);
@@ -61,6 +111,16 @@ function getVisitorId(): string | null {
         // try-on itself still works.
         return null;
     }
+}
+
+/**
+ * Withdrawing consent has to remove the identifier, not merely stop adding to
+ * it. An id that survives a "no" is the same id.
+ */
+function forgetVisitor(): void {
+    try {
+        localStorage.removeItem(VISITOR_KEY);
+    } catch { /* nothing stored to remove */ }
 }
 
 /* ------------------------------------------------------------------ *
@@ -375,7 +435,11 @@ class EmodeWidget {
         // they have deployed anything. Only emode's own developers need to
         // override this, via data-emode-host.
         this.baseUrl = (config.host || EMODE_ORIGIN).replace(/\/+$/, '');
-        this.visitorId = getVisitorId();
+        // Only mint when attribution is allowed. This used to run on every
+        // page load, so a shopper whose browser sends Global Privacy Control -
+        // a legal opt-out in several places - still got an identifier written
+        // to their storage before anything asked.
+        this.visitorId = attributionAllowed(config) ? getVisitorId() : null;
     }
 
     detect(): ProductContext | null {
@@ -581,6 +645,27 @@ class EmodeWidget {
      * page and try-on conversion, AOV and time-to-purchase light up exactly as
      * they do for Shopify merchants.
      */
+    /**
+     * Start attributing after a late consent grant.
+     *
+     * A shopper who accepts the banner mid-visit should be counted from that
+     * moment. Without this, consent=deferred meant attribution never started at
+     * all, no matter what the merchant's banner did.
+     */
+    enableAttribution() {
+        if (this.visitorId) return;
+        this.visitorId = getVisitorId();
+    }
+
+    /**
+     * Stop attributing, and forget what was already stored. Withdrawing consent
+     * has to remove the identifier - one that survives a "no" is the same one.
+     */
+    disableAttribution() {
+        this.visitorId = null;
+        forgetVisitor();
+    }
+
     trackOrder(order: { orderId: string; total: number; currency?: string; productIds?: string[] }) {
         if (!this.config.merchantId || !order?.orderId) return;
         fetch(`${this.baseUrl}/api/order`, {
@@ -618,6 +703,7 @@ class EmodeWidget {
         // emode instance. Merchants never need this; it exists so emode's own
         // developers can test the widget against a dev server.
         host: script?.dataset.emodeHost,
+        consent: script?.dataset.emodeConsent === 'deferred' ? 'deferred' : 'auto',
     };
 
     if (!config.merchantId) {
@@ -633,7 +719,24 @@ class EmodeWidget {
         open: (tab?: 'try-on' | 'dressing-room') => widget.open(null, tab),
         scan: () => widget.scan(),
         trackOrder: (order: any) => widget.trackOrder(order),
-        get visitorId() { return getVisitorId(); },
+        get visitorId() { return readVisitorId(); },
+
+        /**
+         * For stores running their own consent banner: call on accept.
+         *
+         * With data-emode-consent="deferred" nothing is stored until this runs,
+         * so emode sits behind the banner rather than beside it.
+         */
+        grantConsent: () => {
+            consentGranted = true;
+            widget.enableAttribution();
+        },
+
+        /** Call on decline or withdrawal. Removes the identifier. */
+        revokeConsent: () => {
+            consentGranted = false;
+            widget.disableAttribution();
+        },
     };
 
     const start = () => widget.scan();

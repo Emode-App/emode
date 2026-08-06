@@ -141,9 +141,47 @@
   var VISITOR_KEY = 'emode_visitor_id';
   var TRIED_KEY = 'emode_tried_on';
 
-  function getVisitorId() {
+  // ── Consent ──
+  //
+  // The visitor id is stored in the shopper's browser, which makes it exactly
+  // the kind of identifier a consent banner governs. It was being minted on
+  // pageview regardless, so on a storefront in the EU or California emode was
+  // setting a tracking identifier before anyone had agreed to one — the
+  // merchant's compliance problem, created by an app they installed.
+  //
+  // Shopify already knows the answer. The Customer Privacy API reports what this
+  // visitor consented to, and where no consent is required it reports allowed,
+  // so gating on it costs nothing on the storefronts that never needed a banner.
+  //
+  // analyticsProcessingAllowed() is the right question: this identifier exists
+  // to measure whether try-ons convert. It is not marketing and is never sold.
+  function consentAllowsAttribution() {
     try {
-      var id = localStorage.getItem(VISITOR_KEY);
+      var api = window.Shopify && window.Shopify.customerPrivacy;
+      if (!api || typeof api.analyticsProcessingAllowed !== 'function') {
+        // The API is not present. That means the merchant has no consent
+        // requirements configured for this visitor, which is Shopify's own
+        // default of allowed — not a silent opt-in on our part.
+        return true;
+      }
+      return api.analyticsProcessingAllowed() === true;
+    } catch (e) {
+      return false; // Cannot establish consent, so do not assume it.
+    }
+  }
+
+  // Read only. Minting and storing happens in startAttribution, after consent.
+  function readVisitorId() {
+    try {
+      return localStorage.getItem(VISITOR_KEY);
+    } catch (e) {
+      return null;
+    }
+  }
+
+  function mintVisitorId() {
+    try {
+      var id = readVisitorId();
       if (!id) {
         id = (window.crypto && crypto.randomUUID)
           ? crypto.randomUUID()
@@ -157,7 +195,17 @@
     }
   }
 
-  var VISITOR_ID = getVisitorId();
+  // Withdrawing consent has to actually remove the thing, not merely stop
+  // adding to it. An identifier that survives a "no" is the same identifier.
+  function forgetVisitor() {
+    try {
+      localStorage.removeItem(VISITOR_KEY);
+      localStorage.removeItem(TRIED_KEY);
+    } catch (e) {}
+    VISITOR_ID = null;
+  }
+
+  var VISITOR_ID = null;
 
   // Writes the visitor id onto the Shopify cart. Shopify carries cart
   // attributes through to the order, where the orders/create webhook reads it
@@ -192,14 +240,47 @@
     }).catch(function () {});
   }
 
-  logImpression();
+  // Everything that touches the visitor id, behind one gate.
+  function startAttribution() {
+    if (VISITOR_ID) return;               // already running
+    if (!consentAllowsAttribution()) return;
 
-  // A returning shopper who has tried on before may land with a fresh cart, so
-  // re-tag on load. First-time visitors get tagged when they open the modal —
-  // avoids a cart write on every product pageview for people who never engage.
+    VISITOR_ID = mintVisitorId();
+    if (!VISITOR_ID) return;
+
+    logImpression();
+
+    // A returning shopper who has tried on before may land with a fresh cart,
+    // so re-tag on load. First-time visitors get tagged when they open the modal
+    // — avoids a cart write on every product pageview for people who never
+    // engage.
+    try {
+      if (localStorage.getItem(TRIED_KEY)) tagCart();
+    } catch (e) {}
+  }
+
+  // Load Shopify's consent API if the theme has not already, then decide. The
+  // callback fires either way, so a theme without the feature still starts.
   try {
-    if (localStorage.getItem(TRIED_KEY)) tagCart();
-  } catch (e) {}
+    if (window.Shopify && typeof window.Shopify.loadFeatures === 'function') {
+      window.Shopify.loadFeatures(
+        [{ name: 'consent-tracking-api', version: '0.1' }],
+        function () { startAttribution(); }
+      );
+    } else {
+      startAttribution();
+    }
+  } catch (e) {
+    startAttribution();
+  }
+
+  // A shopper who accepts after landing should be attributed from that moment,
+  // and one who declines should stop being — including losing the id already
+  // stored, which is the part that makes the answer mean something.
+  document.addEventListener('visitorConsentCollected', function () {
+    if (consentAllowsAttribution()) startAttribution();
+    else forgetVisitor();
+  });
 
   // ── Match the theme's buy buttons ──
   //
@@ -363,6 +444,16 @@
   // Opening the modal is the engagement signal: tag the cart now so any
   // subsequent purchase is attributable, and remember it for return visits.
   function onEngage() {
+    // Engagement is a stronger consent signal than a pageview, but it is still
+    // not consent. Someone who declined tracking and then tries a jacket on has
+    // declined tracking - the try-on works, it simply is not attributed.
+    if (!consentAllowsAttribution()) return;
+
+    // First engagement is also the first moment attribution is worth starting,
+    // for a visitor who arrived before the consent API had answered.
+    startAttribution();
+    if (!VISITOR_ID) return;
+
     try { localStorage.setItem(TRIED_KEY, '1'); } catch (e) {}
     tagCart();
   }

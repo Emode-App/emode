@@ -5,10 +5,12 @@
     "scripts": {
         "build": "tsup src/index.ts --format iife --minify --clean && npm run deploy:web",
         "deploy:web": "node -e \"require('fs').copyFileSync('dist/index.global.js', '../web/public/widget.js'); console.log('Copied widget build to apps/web/public/widget.js')\"",
-        "dev": "tsup src/index.ts --format iife --watch"
+        "dev": "tsup src/index.ts --format iife --watch",
+        "test": "npm run build --silent && node --test \"test/*.test.mjs\""
     },
     "devDependencies": {
         "tsup": "latest",
-        "typescript": "latest"
+        "typescript": "latest",
+        "jsdom": "^26.0.0"
     }
 }
