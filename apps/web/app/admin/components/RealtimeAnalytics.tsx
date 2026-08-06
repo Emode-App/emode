@@ -16,6 +16,33 @@ export type UsageData = {
     generations_used: number;
 };
 
+/**
+ * Hoisted out of the component on purpose.
+ *
+ * Declared inside RealtimeAnalytics, this was a NEW component type on every
+ * render — and this component re-renders on every realtime tick from Supabase.
+ * React compares types by identity, so a fresh one each time means Recharts
+ * unmounted and remounted the tooltip continuously rather than updating it,
+ * which is both wasted work and why a tooltip can flicker or lose its position
+ * while you are reading it.
+ */
+function CustomTooltip({ active, payload, label }: any) {
+    if (active && payload && payload.length) {
+        return (
+            <div className="bg-obsidian/90 backdrop-blur-md p-4 rounded-xl border border-white/10 shadow-2xl text-white">
+                <p className="font-bold text-xs uppercase tracking-widest text-charcoal/60 mb-2">{label}</p>
+                <div className="flex items-center gap-3">
+                    <div className="w-3 h-3 rounded-full bg-accent-gold shadow-[0_0_10px_rgba(255,193,7,0.8)]"></div>
+                    <p className="font-heading font-bold text-2xl">
+                        {payload[0].value.toLocaleString()} <span className="text-sm font-medium text-charcoal/50">try-ons</span>
+                    </p>
+                </div>
+            </div>
+        );
+    }
+    return null;
+}
+
 export function RealtimeAnalytics({ initialData, merchantId }: { initialData: UsageData[], merchantId?: string }) {
     const [data, setData] = useState<UsageData[]>(initialData);
     const [isLive, setIsLive] = useState(false);
@@ -72,22 +99,6 @@ export function RealtimeAnalytics({ initialData, merchantId }: { initialData: Us
         };
     }, [merchantId]);
 
-    const CustomTooltip = ({ active, payload, label }: any) => {
-        if (active && payload && payload.length) {
-            return (
-                <div className="bg-obsidian/90 backdrop-blur-md p-4 rounded-xl border border-white/10 shadow-2xl text-white">
-                    <p className="font-bold text-xs uppercase tracking-widest text-charcoal/60 mb-2">{label}</p>
-                    <div className="flex items-center gap-3">
-                        <div className="w-3 h-3 rounded-full bg-accent-gold shadow-[0_0_10px_rgba(255,193,7,0.8)]"></div>
-                        <p className="font-heading font-bold text-2xl">
-                            {payload[0].value.toLocaleString()} <span className="text-sm font-medium text-charcoal/50">try-ons</span>
-                        </p>
-                    </div>
-                </div>
-            );
-        }
-        return null;
-    };
 
     return (
         <div>

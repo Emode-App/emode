@@ -1,6 +1,7 @@
 'use client';
 
 import { useState } from 'react';
+import Link from 'next/link';
 import { ArrowRight, Check } from 'lucide-react';
 import { supabase } from '../../../lib/supabase/browser';
 
@@ -129,9 +130,9 @@ export function ChoosePlan({ email }: { email?: string }) {
 
             <p className="text-sm text-charcoal/40">
                 Prefer to pay once?{' '}
-                <a href="/#pricing" className="underline font-medium text-charcoal/60 hover:text-charcoal">
+                <Link href="/#pricing" className="underline font-medium text-charcoal/60 hover:text-charcoal">
                     Lifetime plans are on the pricing page.
-                </a>
+                </Link>
             </p>
         </div>
     );

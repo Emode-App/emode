@@ -6,7 +6,7 @@
         "dev": "next dev",
         "build": "next build",
         "start": "next start",
-        "lint": "next lint"
+        "lint": "eslint ."
     },
     "dependencies": {
         "@emode/database": "*",
@@ -37,6 +37,7 @@
         "eslint-config-next": "^15.5.22",
         "postcss": "^8.4.31",
         "tailwindcss": "^3.4.1",
-        "typescript": "latest"
+        "typescript": "latest",
+        "@eslint/eslintrc": "^3.2.0"
     }
 }

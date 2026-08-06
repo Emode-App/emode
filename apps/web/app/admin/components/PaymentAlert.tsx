@@ -1,6 +1,6 @@
 'use client';
 
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { AlertTriangle } from 'lucide-react';
 import { supabase } from '../../../lib/supabase/browser';
 
@@ -25,10 +25,19 @@ import { supabase } from '../../../lib/supabase/browser';
 export function PaymentAlert({ since }: { since?: string | null }) {
     const [busy, setBusy] = useState(false);
     const [error, setError] = useState<string | null>(null);
+    const [days, setDays] = useState<number | null>(null);
 
-    const days = since
-        ? Math.floor((Date.now() - new Date(since).getTime()) / 86_400_000)
-        : 0;
+    // Read the clock after mount, not during render.
+    //
+    // Date.now() during render is evaluated once on the server and again in the
+    // browser, and the two do not agree — around midnight UTC they disagree by a
+    // whole day, and React logs a hydration mismatch for a banner about someone's
+    // billing. Null until mounted means the sentence simply omits the duration
+    // for one frame rather than rendering a number the server did not send.
+    useEffect(() => {
+        if (!since) return;
+        setDays(Math.floor((Date.now() - new Date(since).getTime()) / 86_400_000));
+    }, [since]);
 
     const openPortal = async () => {
         setBusy(true);
@@ -63,7 +72,9 @@ export function PaymentAlert({ since }: { since?: string | null }) {
                     </h3>
                     <p className="text-sm text-amber-900/70 leading-relaxed mb-4">
                         We&apos;ll retry automatically over the next couple of weeks
-                        {days > 0 && <> &mdash; this started {days === 1 ? 'yesterday' : `${days} days ago`}</>}.
+                        {days !== null && days > 0 && (
+                            <> &mdash; this started {days === 1 ? 'yesterday' : `${days} days ago`}</>
+                        )}.
                         Your try-ons are still running in the meantime. It&apos;s usually
                         an expired card, and updating it takes about thirty seconds.
                     </p>
