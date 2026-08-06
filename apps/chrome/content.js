@@ -2,11 +2,6 @@
 
 console.log('emodeAI | Universal Widget Active.');
 
-// ⚠️ SHIP-TIME TODO: flip this default to 'https://<your-production-domain>'
-// before submitting to the Chrome Web Store. It's localhost while the app has
-// no live deployment. The storage override below works in either direction:
-// chrome.storage.local.set({ emode_dev_base_url: '<url>' }) in the service
-// worker console.
 // Live origin. www is canonical — the apex 308-redirects to it, and an
 // extra hop on every API call is wasteful. Override for local work with:
 //   chrome.storage.local.set({ emode_dev_base_url: 'http://localhost:3000' })
@@ -57,7 +52,10 @@ function notifyProductDetected(context) {
     try {
         chrome.runtime.sendMessage({
             type: 'PRODUCT_DETECTED',
-            product: { ...context, url: window.location.href }
+            // sourceUrl wins where it exists: on a search-results page the
+            // current URL is Google, not the garment. Saving a card that points
+            // back at a search query is the same as saving nothing.
+            product: { ...context, url: context.sourceUrl || window.location.href }
         });
     } catch (e) { /* extension context invalidated (e.g. mid-reload) — ignore */ }
 }
@@ -68,23 +66,38 @@ function addToLocalCart(context) {
     try {
         chrome.runtime.sendMessage({
             type: 'CART_ADD',
-            item: { title: context.title, image: context.image, price: context.price, url: window.location.href }
+            item: {
+                title: context.title,
+                image: context.image,
+                price: context.price,
+                // See notifyProductDetected: the item's own page, never the
+                // results page that happened to list it.
+                url: context.sourceUrl || window.location.href,
+            }
         });
     } catch (e) { /* extension context invalidated — ignore */ }
 }
 
-function showToast(message) {
+/**
+ * Confirmation toast, optionally with something to do about it.
+ *
+ * "Added to Dressing Room" used to be a dead end. Someone who has just decided
+ * they like a garment is at the exact peak of wanting to see it on, and the
+ * confirmation of that decision was the one thing on screen they could not
+ * click. Making them re-find the button, or open the side panel, spends that
+ * moment on navigation.
+ *
+ * `action` is optional: { label, onClick }.
+ */
+function showToast(message, action) {
     const existing = document.querySelector('.emode-toast');
-    if (existing) existing.remove();
+    if (existing) {
+        if (existing._emodeTimer) clearTimeout(existing._emodeTimer);
+        existing.remove();
+    }
 
     const toast = document.createElement('div');
     toast.className = 'emode-toast';
-    toast.innerHTML = `
-        <div style="background: rgba(0,0,0,0.95); color: white; padding: 12px 24px; border-radius: 50px; font-family: 'Inter', sans-serif; font-size: 13px; font-weight: 700; display: flex; align-items: center; gap: 12px; box-shadow: 0 10px 30px rgba(0,0,0,0.5); border: 1px solid rgba(255,255,255,0.1); backdrop-filter: blur(10px); pointer-events: auto;">
-            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round" style="color: #10b981;"><polyline points="20 6 9 17 4 12"></polyline></svg>
-            ${message.toUpperCase()}
-        </div>
-    `;
     toast.style.cssText = `
         position: fixed;
         bottom: 50px;
@@ -94,16 +107,83 @@ function showToast(message) {
         opacity: 0;
         transition: all 0.3s cubic-bezier(0.18, 0.89, 0.32, 1.28);
     `;
+
+    const pill = document.createElement('div');
+    pill.style.cssText = `
+        background: rgba(0,0,0,0.95); color: white; padding: 12px 24px;
+        border-radius: 50px; font-family: 'Inter', system-ui, sans-serif;
+        font-size: 13px; font-weight: 700; display: flex; align-items: center;
+        gap: 12px; box-shadow: 0 10px 30px rgba(0,0,0,0.5);
+        border: 1px solid rgba(255,255,255,0.1); backdrop-filter: blur(10px);
+        pointer-events: auto;
+    `;
+
+    const tick = document.createElementNS('http://www.w3.org/2000/svg', 'svg');
+    tick.setAttribute('width', '16');
+    tick.setAttribute('height', '16');
+    tick.setAttribute('viewBox', '0 0 24 24');
+    tick.setAttribute('fill', 'none');
+    tick.setAttribute('stroke', '#10b981');
+    tick.setAttribute('stroke-width', '3');
+    tick.setAttribute('stroke-linecap', 'round');
+    tick.setAttribute('stroke-linejoin', 'round');
+    const poly = document.createElementNS('http://www.w3.org/2000/svg', 'polyline');
+    poly.setAttribute('points', '20 6 9 17 4 12');
+    tick.appendChild(poly);
+    pill.appendChild(tick);
+
+    // textContent, not innerHTML. The message can carry a scraped product title,
+    // and a title is attacker-controlled text on someone else's page.
+    const label = document.createElement('span');
+    label.textContent = String(message).toUpperCase();
+    pill.appendChild(label);
+
+    let dismissed = false;
+    const dismiss = () => {
+        if (dismissed) return;
+        dismissed = true;
+        if (toast._emodeTimer) clearTimeout(toast._emodeTimer);
+        toast.style.opacity = '0';
+        toast.style.bottom = '50px';
+        setTimeout(() => toast.remove(), 300);
+    };
+
+    if (action) {
+        const cta = document.createElement('button');
+        cta.type = 'button';
+        cta.textContent = action.label;
+        cta.style.cssText = `
+            background: white; color: #111; border: none; padding: 7px 16px;
+            border-radius: 50px; font-family: inherit; font-size: 11px;
+            font-weight: 800; letter-spacing: 0.06em; cursor: pointer;
+            margin-left: 4px; white-space: nowrap;
+        `;
+        cta.onclick = (e) => {
+            e.preventDefault();
+            e.stopPropagation();
+            dismiss();
+            action.onClick();
+        };
+        pill.appendChild(cta);
+    }
+
+    toast.appendChild(pill);
     document.body.appendChild(toast);
+
     setTimeout(() => {
         toast.style.opacity = '1';
         toast.style.bottom = '60px';
     }, 10);
-    setTimeout(() => {
-        toast.style.opacity = '0';
-        toast.style.bottom = '50px';
-        setTimeout(() => toast.remove(), 300);
-    }, 3000);
+
+    // An actionable toast gets longer, because now it is worth reading rather
+    // than merely worth noticing. Hovering holds it open - a toast that expires
+    // while the cursor is travelling toward it is worse than no toast.
+    const life = action ? 7000 : 3000;
+    toast._emodeTimer = setTimeout(dismiss, life);
+    pill.addEventListener('mouseenter', () => clearTimeout(toast._emodeTimer));
+    pill.addEventListener('mouseleave', () => {
+        if (!dismissed) toast._emodeTimer = setTimeout(dismiss, 2000);
+    });
 }
 
 /**
@@ -985,7 +1065,10 @@ function injectButtons() {
         iframe.src = addUrl;
         document.body.appendChild(iframe);
         setTimeout(() => iframe.remove(), 5000);
-        showToast('Added to Dressing Room');
+        showToast('Added to Dressing Room', {
+            label: 'TRY IT ON',
+            onClick: () => openModal(extractProductContext() || context),
+        });
     };
 
     btnGroup.appendChild(tryBtn);
@@ -1097,9 +1180,20 @@ document.addEventListener('mouseover', (e) => {
     }
 
     // Validate this is actually a product card before showing pill
-    if (target.tagName === 'IMG' && target.offsetWidth > 150 && target.offsetHeight > 150) {
+    // Search-result thumbnails are legitimately smaller than a storefront's
+    // grid images, so the floor that keeps pills off site furniture elsewhere
+    // would exclude every real product on a results page.
+    const onSearch = isGoogleSearch();
+    const minSize = onSearch ? 70 : 150;
+
+    if (target.tagName === 'IMG' && target.offsetWidth > minSize && target.offsetHeight > minSize) {
+        // On a results page the generic validator cannot apply - every href is a
+        // Google redirect - so the adapter decides, and it is stricter: a card
+        // without a price or a resolvable destination gets no pill.
+        const searchContext = onSearch ? extractFromGoogleCard(target) : null;
+
         // Validate this is a product card
-        if (!isValidProductCard(target)) {
+        if (!searchContext && !isValidProductCard(target)) {
             // Same grace period as the mousemove path, and for the same reason:
             // a card that swaps its image on hover briefly presents a node that
             // has not been re-associated with its link yet, and hiding on that
@@ -1156,31 +1250,60 @@ document.addEventListener('mouseover', (e) => {
             addSeg.onmouseout = () => addSeg.style.background = 'transparent';
 
             // ATTACH SINGLE CLICK HANDLERS THAT READ FROM TRIGGER STATE
-            trySeg.onclick = (e) => {
+            trySeg.onclick = async (e) => {
                 e.stopPropagation();
+                e.preventDefault();
                 const currentTarget = trigger._emodeTarget;
                 if (!currentTarget) return;
-                const container = findProductContainer(currentTarget);
-                const context = extractFromContainer(container, currentTarget);
+
+                let context = trigger._emodeContext;
+                if (context) {
+                    // Search card: swap the thumbnail for the merchant's own
+                    // image before generating.
+                    trySeg.textContent = 'LOADING...';
+                    context = await resolveGoogleImage(context);
+                    trySeg.innerHTML = '&#10024; TRY ON';
+                } else {
+                    const container = findProductContainer(currentTarget);
+                    context = extractFromContainer(container, currentTarget);
+                }
+                if (!context) return;
                 notifyProductDetected(context);
                 openModal(context);
             };
 
-            addSeg.onclick = (e) => {
+            addSeg.onclick = async (e) => {
                 e.stopPropagation();
+                e.preventDefault();
                 const currentTarget = trigger._emodeTarget;
                 if (!currentTarget) return;
-                const container = findProductContainer(currentTarget);
-                const context = extractFromContainer(container, currentTarget);
+
+                let context = trigger._emodeContext;
+                if (context) {
+                    context = await resolveGoogleImage(context);
+                } else {
+                    const container = findProductContainer(currentTarget);
+                    context = extractFromContainer(container, currentTarget);
+                }
+                if (!context) return;
                 notifyProductDetected(context);
                 addToLocalCart(context);
-                const addUrl = `${BASE_URL}/modal?action=add&title=${encodeURIComponent(context.title)}&image=${encodeURIComponent(context.image)}&price=${encodeURIComponent(context.price)}&origin=${encodeURIComponent(window.location.host)}`;
+                const originHost = context.sourceUrl
+                    ? new URL(context.sourceUrl).host
+                    : window.location.host;
+                const addUrl = `${BASE_URL}/modal?action=add&title=${encodeURIComponent(context.title)}&image=${encodeURIComponent(context.image)}&price=${encodeURIComponent(context.price)}&origin=${encodeURIComponent(originHost)}`;
                 const iframe = document.createElement('iframe');
                 iframe.style.display = 'none';
                 iframe.src = addUrl;
                 document.body.appendChild(iframe);
                 setTimeout(() => iframe.remove(), 5000);
-                showToast('Added to Dressing Room');
+                // Same offer from the listing-page pill: the shopper never had
+                // to open the product to save it, so they should not have to
+                // open it to try it on either.
+                showToast('Added to Dressing Room', {
+                    label: 'TRY IT ON',
+                    onClick: () => openModal(context),
+                });
             };
 
             trigger.appendChild(trySeg);
@@ -1199,6 +1322,10 @@ document.addEventListener('mouseover', (e) => {
         // does not.
         trigger._emodeTarget = target;
         trigger._emodeCard = target.closest('a[href]') || findProductContainer(target) || target;
+        // Set only on search results, where the DOM cannot be re-read the way a
+        // storefront's can. Null everywhere else so the normal fresh-read path
+        // is never bypassed.
+        trigger._emodeContext = searchContext || null;
 
         // Cancel a pending hide: coming back inside the card during the grace
         // window should keep the pill rather than let it disappear behind you.
@@ -1258,3 +1385,218 @@ document.addEventListener('mousemove', (e) => {
     }
 });
 
+
+/* ------------------------------------------------------------------ *
+ * Search-results adapter (Google)                                     *
+ * ------------------------------------------------------------------ */
+
+/**
+ * Product cards on a Google results page.
+ *
+ * Search is where a lot of shopping actually starts, and the Sponsored Products
+ * strip is a rack of real garments with real prices attached. The generic
+ * detector cannot see them: it requires the image to sit inside a product-shaped
+ * href, and Google wraps everything in /aclk redirects. So this is an explicit
+ * adapter rather than a loosening of the general rule - loosening the rule is
+ * what previously put pills on magazine photos.
+ *
+ * The bar stays high on purpose. A card qualifies only if it carries a price AND
+ * resolves to a real destination URL. No price, no pill.
+ */
+const GOOGLE_HOST_RE = /^(?:www\.)?google\.[a-z.]{2,7}$/i;
+
+function isGoogleSearch() {
+    return GOOGLE_HOST_RE.test(window.location.host) &&
+        /^\/(search|shopping)/.test(window.location.pathname);
+}
+
+/**
+ * The merchant URL hiding inside a Google redirect.
+ *
+ * /aclk?...&adurl=<encoded> for ads, /url?q=<encoded> for the older organic
+ * wrapper. Returning null rather than the redirect itself is deliberate: a pill
+ * whose destination is google.com/aclk cannot be attributed, cannot be resolved
+ * for a real product image, and is not "a real item" in the sense that matters.
+ */
+function googleDestination(href) {
+    if (!href) return null;
+    let url;
+    try {
+        url = new URL(href, window.location.origin);
+    } catch { return null; }
+
+    for (const key of ['adurl', 'q', 'url', 'imgrefurl']) {
+        const raw = url.searchParams.get(key);
+        if (!raw) continue;
+        try {
+            const dest = new URL(raw);
+            if (dest.protocol !== 'http:' && dest.protocol !== 'https:') continue;
+            if (GOOGLE_HOST_RE.test(dest.host)) continue;
+            return dest.toString();
+        } catch { /* not a URL, try the next key */ }
+    }
+
+    // A direct outbound link (Google sometimes renders these unwrapped).
+    if (!GOOGLE_HOST_RE.test(url.host) && /^https?:$/.test(url.protocol)) {
+        return url.toString();
+    }
+    return null;
+}
+
+const GOOGLE_PRICE_RE = /(?:[$£€]|USD|EUR|GBP)\s?\d[\d,]*(?:\.\d{2})?/;
+
+/**
+ * Read a Google result card, given an image inside it.
+ * Returns the same shape as extractFromContainer, or null.
+ */
+function extractFromGoogleCard(img) {
+    if (!img || img.tagName !== 'IMG') return null;
+
+    const anchor = img.closest('a[href]');
+    if (!anchor) return null;
+
+    const destination = googleDestination(anchor.getAttribute('href'));
+    if (!destination) return null;
+
+    // Walk up to the card: the smallest ancestor that carries a price.
+    let card = anchor;
+    let price = '';
+    for (let i = 0; i < 6 && card; i++) {
+        const match = (card.innerText || '').match(GOOGLE_PRICE_RE);
+        if (match) { price = match[0]; break; }
+        card = card.parentElement;
+    }
+    if (!price || !card) return null;
+
+    // Title: the longest non-price line in the card that is not the merchant
+    // name or Google's own chrome. Merchant names are short and repeat across
+    // every card in the strip, so length is a decent discriminator here.
+    const lines = (card.innerText || '')
+        .split('\n')
+        .map((l) => l.trim())
+        .filter((l) =>
+            l.length > 8 &&
+            !GOOGLE_PRICE_RE.test(l) &&
+            !/^(sponsored|visit|ad|shop now|free (shipping|delivery)|in stock|by )/i.test(l) &&
+            !/^\d+(\.\d+)?\s*(star|\()/i.test(l));
+
+    const title = lines.sort((a, b) => b.length - a.length)[0] || img.alt || '';
+    if (!title || title.length < 5) return null;
+
+    return {
+        title: cleanGoogleTitle(title),
+        image: img.currentSrc || img.src,
+        price,
+        alternateImages: [],
+        // Where the pill should send them, and what we resolve a full-size
+        // product image from.
+        sourceUrl: destination,
+    };
+}
+
+// Google truncates long titles with an ellipsis mid-word ("Jordan 1 Retro High
+// Virgil Abloh Archiv..."). Sending that to the model as-is is worse than
+// sending a clean stem.
+function cleanGoogleTitle(title) {
+    return title
+        .replace(/\s*(\.\.\.|…)\s*$/, '')
+        .replace(/\s+/g, ' ')
+        .trim()
+        .slice(0, 140);
+}
+
+/**
+ * Trade the search thumbnail for the merchant's own product image.
+ *
+ * Google serves ~200px gstatic thumbnails. Feeding one to the try-on model
+ * produces a visibly worse result than the same garment tried on from the
+ * product page, and a shopper has no way to know why - they would just conclude
+ * emode is bad. So on click we fetch the destination page and read its real
+ * product image out of JSON-LD or OpenGraph.
+ *
+ * Falls back to the thumbnail rather than failing: a slightly soft try-on beats
+ * a dead button. The fetch is credential-less (see background.js).
+ */
+function resolveGoogleImage(context) {
+    return new Promise((resolve) => {
+        if (!context?.sourceUrl) return resolve(context);
+
+        let settled = false;
+        const done = (extra) => {
+            if (settled) return;
+            settled = true;
+            resolve({ ...context, ...extra });
+        };
+
+        // Never let image resolution be the reason nothing happens.
+        setTimeout(() => done({}), 4000);
+
+        try {
+            chrome.runtime.sendMessage(
+                { type: 'RESOLVE_PRODUCT_IMAGE', url: context.sourceUrl },
+                (response) => {
+                    if (chrome.runtime.lastError || !response?.image) return done({});
+                    done({ image: response.image, title: response.title || context.title });
+                }
+            );
+        } catch { done({}); }
+    });
+}
+
+/* ------------------------------------------------------------------ *
+ * Did they actually buy it?                                           *
+ * ------------------------------------------------------------------ */
+
+/**
+ * Order-confirmation URLs, across the platforms that matter.
+ *
+ * Shopify lands on /checkouts/<token>/thank_you (and /orders/<token> for the
+ * order status page), WooCommerce on /checkout/order-received/<id>, and most
+ * bespoke carts land on some spelling of thank-you or order-confirmation.
+ */
+const ORDER_CONFIRMED_RE = /\/(?:thank[-_]?you|thanks|order[-_]?(?:confirmation|confirmed|complete|completed|received|success)|checkout\/success|purchase[-_]?complete|receipt)(?:[/?#]|$)/i;
+
+// Shopify specifically: /checkouts/<token>/thank_you, /orders/<long-token>.
+const SHOPIFY_CONFIRMED_RE = /\/(?:checkouts\/[^/]+\/thank_you|orders\/[a-f0-9]{16,})(?:[/?#]|$)/i;
+
+/**
+ * Mark saved items as bought when the shopper reaches a confirmation page.
+ *
+ * A saved item that stays "saved" forever is clutter, and worse, it is a
+ * standing nag to buy something already owned. This is what turns the panel
+ * from a list of links into a record of what actually happened.
+ *
+ * It is a heuristic and it is honest about being one. The extension cannot see
+ * inside someone else's checkout - no line items, no order total, no way to
+ * know which of three saved pieces the order covered. What it CAN see is that
+ * this browser reached a confirmation URL on a host it has saved items from.
+ * So it marks that host's items, and the side panel presents the result as
+ * "looks purchased" rather than as a receipt. Wrong occasionally, in a
+ * direction that costs nothing: the item stays in the list either way.
+ */
+function checkForPurchase() {
+    const path = window.location.pathname;
+    if (!ORDER_CONFIRMED_RE.test(path) && !SHOPIFY_CONFIRMED_RE.test(path)) return;
+
+    try {
+        chrome.runtime.sendMessage({
+            type: 'CART_MARK_PURCHASED',
+            host: window.location.host,
+        });
+    } catch (e) { /* extension context invalidated - ignore */ }
+}
+
+if (!isEmodeApp()) {
+    checkForPurchase();
+
+    // Checkouts are single-page apps as often as not, so the confirmation step
+    // frequently arrives as a history push rather than a navigation the content
+    // script sees load.
+    let lastPath = window.location.pathname;
+    setInterval(() => {
+        if (window.location.pathname !== lastPath) {
+            lastPath = window.location.pathname;
+            checkForPurchase();
+        }
+    }, 1000);
+}

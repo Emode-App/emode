@@ -26,6 +26,8 @@ export default [
                 document: 'readonly',
                 console: 'readonly',
                 fetch: 'readonly',
+                // Present in both content scripts and the MV3 service worker.
+                AbortController: 'readonly',
                 localStorage: 'readonly',
                 setTimeout: 'readonly',
                 clearTimeout: 'readonly',

@@ -262,10 +262,25 @@ async function loadCart() {
     renderCart(emode_cart || []);
 }
 
+// "gucci.com" reads better than a full URL, and tells the shopper which of two
+// saved lookalikes came from where.
+function storeName(url) {
+    if (!url) return '';
+    try {
+        return new URL(url).host.replace(/^www\./, '');
+    } catch {
+        return '';
+    }
+}
+
 function renderCart(items) {
     if (!cartList || !cartTotal) return;
 
-    const total = items.reduce((sum, item) => sum + parseCartPrice(item.price), 0);
+    // Purchased items stop counting toward the total - a running total that
+    // includes things already bought is not a number anyone can use.
+    const total = items
+        .filter((item) => !item.purchasedAt)
+        .reduce((sum, item) => sum + parseCartPrice(item.price), 0);
     cartTotal.textContent = `$${total.toFixed(2)}`;
 
     if (items.length === 0) {
@@ -278,16 +293,33 @@ function renderCart(items) {
         const row = document.createElement('div');
         row.className = 'glass-card';
         row.style.cssText = 'padding:10px 12px;display:flex;align-items:center;gap:12px;background:white;';
+        // The whole row opens the item, not just a button on the end of it. A
+        // saved card IS a pointer to something for sale; making the shopper aim
+        // at a 40px target to act on that is friction for no reason.
+        const bought = !!item.purchasedAt;
+        const store = storeName(item.url);
+        row.style.cursor = item.url ? 'pointer' : 'default';
         row.innerHTML = `
-            <img src="${escapeHtml(item.image)}" style="width:36px;height:44px;object-fit:contain;border-radius:6px;flex-shrink:0;background:#f5f5f5;" />
+            <img src="${escapeHtml(item.image)}" style="width:36px;height:44px;object-fit:contain;border-radius:6px;flex-shrink:0;background:#f5f5f5;${bought ? 'opacity:0.55;' : ''}" />
             <div style="flex:1;min-width:0;">
-                <p style="font-size:0.75rem;font-weight:700;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">${escapeHtml(item.title)}</p>
-                <p style="font-size:0.7rem;color:#666;">${escapeHtml(item.price || 'Price unknown')}</p>
+                <p style="font-size:0.75rem;font-weight:700;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;${bought ? 'color:#666;' : ''}">${escapeHtml(item.title)}</p>
+                <p style="font-size:0.7rem;color:#666;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">
+                    ${escapeHtml(item.price || 'Price unknown')}${store ? ' &middot; ' + escapeHtml(store) : ''}
+                </p>
             </div>
-            <button class="btn-cart-buy" style="background:#111;color:white;border:none;padding:6px 10px;border-radius:6px;font-size:9px;font-weight:700;cursor:pointer;flex-shrink:0;">BUY</button>
+            ${bought
+                ? `<span style="background:#ecfdf5;color:#047857;border:1px solid #a7f3d0;padding:5px 9px;border-radius:6px;font-size:9px;font-weight:800;letter-spacing:0.04em;flex-shrink:0;">PURCHASED</span>`
+                : `<button class="btn-cart-buy" style="background:#111;color:white;border:none;padding:6px 10px;border-radius:6px;font-size:9px;font-weight:700;cursor:pointer;flex-shrink:0;">BUY</button>`}
             <button class="btn-cart-remove" style="background:none;border:none;color:rgba(0,0,0,0.3);cursor:pointer;font-size:16px;flex-shrink:0;">&times;</button>
         `;
-        row.querySelector('.btn-cart-buy').onclick = () => window.open(item.url || BASE_URL, '_blank');
+        if (item.url) {
+            row.onclick = (e) => {
+                if (e.target.closest('.btn-cart-remove')) return;
+                window.open(item.url, '_blank', 'noopener');
+            };
+        }
+        const buyBtn = row.querySelector('.btn-cart-buy');
+        if (buyBtn) buyBtn.onclick = () => window.open(item.url || BASE_URL, '_blank', 'noopener');
         row.querySelector('.btn-cart-remove').onclick = async () => {
             const { emode_cart } = await chrome.storage.local.get({ emode_cart: [] });
             const updated = (emode_cart || []).filter(i => i.id !== item.id);
