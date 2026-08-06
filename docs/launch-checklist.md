@@ -53,8 +53,11 @@ Submission work, not bugs.
   support contact, privacy policy URL. Then Shopify installs the app on a test
   store and reviews it.
 - **Chrome Web Store listing** — the extension has never been packaged or
-  submitted. Icons and manifest are ready; the listing, screenshots, privacy
-  disclosures and review are not.
+  submitted. Every field the form asks for is now written out in
+  [docs/chrome-web-store.md](chrome-web-store.md), including the permission
+  justifications, which are what decides how long review takes. What is left is
+  yours: five screenshots, and pressing submit. Budget two to four weeks for
+  review — `<all_urls>` routes it to a human.
 - **AppSumo partner approval** — applying and being accepted, ahead of any listing
   assets. The redemption flow itself is built and tested end to end.
 
@@ -65,9 +68,18 @@ Submission work, not bugs.
   sharply by state — Illinois has BIPA, and it carries a private right of action.
   Get both read before AppSumo.
 
-- **Almost no automated tests.** The Chrome extension lints (`npm run lint` in
-  `apps/chrome`) and that is the whole of it. Every regression found in the last
-  session was found by a person looking at a screen.
+- **Thin automated tests, but no longer none.** `npm test` runs 64 regression
+  tests over the Chrome extension's detection: JSON-LD and OpenGraph reading,
+  quick-view overlays, listing cards, site chrome, the Google results adapter,
+  order-confirmation matching, and the merchant-conflict check. Writing them
+  found four real bugs that hand-testing had not — including quick-view dialogs
+  detecting nothing whenever their photo linked to the product page, which is
+  the most ordinary quick-view markup there is.
+
+  Nothing else in the monorepo has tests. The web app, the Shopify app and the
+  widget are still verified by a person looking at a screen. The widget is the
+  next one worth covering: it runs on merchants' own sites, where a regression is
+  visible to their customers before it is visible to you.
 
 - **The "second entity" pattern.** Nearly every bug found came out the moment
   there were two of something: a second merchant blanked the dashboard, a second
