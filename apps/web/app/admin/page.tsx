@@ -3,6 +3,7 @@ import { getMerchantForUser, serviceClient } from './admin-util';
 import { WidgetInstallCode } from './components/WidgetInstallCode';
 import { AttributionPanel, TryOnStats } from './components/AttributionPanel';
 import { ChoosePlan } from './components/ChoosePlan';
+import { PaymentAlert } from './components/PaymentAlert';
 import { createSupabaseServerClient } from '../../lib/supabase/server';
 
 async function getStats(merchantId?: string) {
@@ -161,6 +162,10 @@ export default async function AdminDashboard() {
                     </a>
                 </div>
             </header>
+
+            {merchant?.payment_state === 'past_due' && (
+                <PaymentAlert since={merchant.dunning_since} />
+            )}
 
             {/* Merchant ID for widget install */}
             {merchant && (

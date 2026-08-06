@@ -209,20 +209,105 @@ export async function POST(request: Request) {
                 break;
             }
 
+            /**
+             * A failed payment is not a cancellation.
+             *
+             * This used to write a console line and nothing else, so a merchant
+             * whose card expired kept full service indefinitely and nobody found
+             * out until someone happened to read the Stripe dashboard.
+             *
+             * The opposite reflex is worse. Cards fail for expiries and bank
+             * hiccups constantly, and switching off a paying merchant's
+             * storefront widget over one declined charge breaks THEIR customers'
+             * checkout, not ours — the blast radius of a false positive here
+             * lands on someone who did nothing wrong.
+             *
+             * Stripe already models the middle: it retries across a dunning
+             * window and reports the last attempt by leaving next_payment_attempt
+             * null. So mark the state, keep serving, and only revoke once Stripe
+             * itself has given up.
+             */
             case 'invoice.payment_failed': {
                 const invoice = event.data.object as Stripe.Invoice;
                 const stripeCustomerId = invoice.customer as string;
+                // Null means Stripe has exhausted its retries — this was the
+                // last attempt, not another one in a sequence.
+                const willRetry = !!invoice.next_payment_attempt;
 
-                // Find merchant and log the failure
                 const { data: merchant } = await supabase
                     .from('merchants')
-                    .select('id')
+                    .select('id, dunning_since')
                     .eq('stripe_customer_id', stripeCustomerId)
-                    .single();
+                    .order('created_at', { ascending: false })
+                    .limit(1)
+                    .maybeSingle();
 
-                if (merchant) {
-                    console.error(`[Stripe Webhook] Payment failed: merchant=${merchant.id}, amount=${invoice.amount_due}`);
-                    // Optionally suspend after N failures — for now just log
+                if (!merchant) {
+                    console.warn(`[Stripe Webhook] Payment failed but no merchant for customer=${stripeCustomerId}`);
+                    break;
+                }
+
+                await supabase
+                    .from('merchants')
+                    .update({
+                        payment_state: 'past_due',
+                        // Preserved across retries so the dashboard can say how
+                        // long this has been going on, not merely that it is.
+                        dunning_since: merchant.dunning_since || new Date().toISOString(),
+                        last_payment_failure: new Date().toISOString(),
+                    })
+                    .eq('id', merchant.id);
+
+                if (willRetry) {
+                    console.warn(
+                        `[Stripe Webhook] Payment failed, Stripe will retry: merchant=${merchant.id}, ` +
+                        `amount=${invoice.amount_due}, next=${new Date(invoice.next_payment_attempt * 1000).toISOString()}`
+                    );
+                    break;
+                }
+
+                // Final attempt. Same revocation as a cancellation — the
+                // subscription is not being paid for and will not be.
+                await supabase
+                    .from('entitlements')
+                    .delete()
+                    .eq('subject_id', merchant.id)
+                    .eq('subject_type', 'merchant');
+
+                await supabase
+                    .from('products')
+                    .update({ marketplace_visible: false })
+                    .eq('merchant_id', merchant.id);
+
+                console.error(
+                    `[Stripe Webhook] Payment failed finally, entitlements revoked: merchant=${merchant.id}`
+                );
+                break;
+            }
+
+            /**
+             * Recovery. Without this a merchant whose retry succeeded stays
+             * flagged past_due forever, which is a support ticket from someone
+             * who has already paid.
+             */
+            case 'invoice.payment_succeeded': {
+                const invoice = event.data.object as Stripe.Invoice;
+                const stripeCustomerId = invoice.customer as string;
+
+                const { data: merchant } = await supabase
+                    .from('merchants')
+                    .select('id, payment_state')
+                    .eq('stripe_customer_id', stripeCustomerId)
+                    .order('created_at', { ascending: false })
+                    .limit(1)
+                    .maybeSingle();
+
+                if (merchant?.payment_state) {
+                    await supabase
+                        .from('merchants')
+                        .update({ payment_state: null, dunning_since: null })
+                        .eq('id', merchant.id);
+                    console.log(`[Stripe Webhook] Payment recovered: merchant=${merchant.id}`);
                 }
                 break;
             }
