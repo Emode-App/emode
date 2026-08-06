@@ -1443,6 +1443,17 @@ function googleDestination(href) {
     return null;
 }
 
+// How many distinct merchant destinations live under this element. More than
+// one means it is a strip of cards, not a card.
+function countProductLinks(el) {
+    const seen = new Set();
+    for (const a of el.querySelectorAll('a[href]')) {
+        const dest = googleDestination(a.getAttribute('href'));
+        if (dest) seen.add(dest);
+    }
+    return seen.size;
+}
+
 const GOOGLE_PRICE_RE = /(?:[$£€]|USD|EUR|GBP)\s?\d[\d,]*(?:\.\d{2})?/;
 
 /**
@@ -1458,15 +1469,31 @@ function extractFromGoogleCard(img) {
     const destination = googleDestination(anchor.getAttribute('href'));
     if (!destination) return null;
 
-    // Walk up to the card: the smallest ancestor that carries a price.
+    // Walk up to the card, and stop at the card.
+    //
+    // Climbing a fixed number of levels looking for a price is the same mistake
+    // that put pills on magazine photos: a container holding several cards has
+    // a price in it, just not this card's. On a results page it meant an
+    // unpriced tile - "Buy and sell authentic sneakers" - inherited the $882
+    // from the listing two cards over and offered a try-on for a page that
+    // sells nothing.
+    //
+    // An ancestor holding more than one outbound product link is not one card,
+    // so the walk stops before it.
     let card = anchor;
     let price = '';
     for (let i = 0; i < 6 && card; i++) {
+        if (i > 0 && countProductLinks(card) > 1) break;
         const match = (card.innerText || '').match(GOOGLE_PRICE_RE);
         if (match) { price = match[0]; break; }
         card = card.parentElement;
     }
     if (!price || !card) return null;
+
+    // A favicon or a rating star is not a garment. The hover handler applies its
+    // own floor, but the reader must not depend on its caller for that.
+    const rect = img.getBoundingClientRect();
+    if (rect.width < 60 || rect.height < 60) return null;
 
     // Title: the longest non-price line in the card that is not the merchant
     // name or Google's own chrome. Merchant names are short and repeat across

@@ -1,0 +1,52 @@
+<!--
+  A listing page whose cards swap their image on hover.
+
+  This is the Gucci shape, and it is the bug that made the hover pill flash and
+  vanish: the card replaces its <img> when the cursor arrives, so a pill bound to
+  the original node found itself holding an element no longer in the document.
+
+  Card 3 is the trap. It is an editorial tile sitting in the same grid — a photo
+  that links to a lookbook, with no price. It must never get a pill.
+-->
+<html>
+<head><title>Men's Ready-to-Wear | ATELIER NORD</title></head>
+<body>
+  <main data-rect="0,0,1440,1600">
+    <div class="product-grid" data-rect="0,120,1440,1400">
+
+      <article class="card" data-rect="40,120,420,620">
+        <a href="/us/en/pr/men/ready-to-wear/wool-blazer-p-771234" data-rect="40,120,420,520">
+          <img class="card__primary"
+               src="https://media.atelier-nord.com/771234/wool-blazer-1.jpg"
+               alt="Wool blazer" data-rect="40,120,420,520" />
+          <img class="card__hover" data-hidden
+               src="https://media.atelier-nord.com/771234/wool-blazer-2.jpg"
+               alt="Wool blazer, back" data-rect="40,120,420,520" />
+        </a>
+        <h3 data-rect="40,650,420,24">Wool blazer</h3>
+        <span class="price" data-rect="40,680,420,20">$3,200.00</span>
+      </article>
+
+      <article class="card" data-rect="500,120,420,620">
+        <a href="/us/en/pr/men/ready-to-wear/silk-shirt-p-889001" data-rect="500,120,420,520">
+          <img class="card__primary"
+               src="https://media.atelier-nord.com/889001/silk-shirt-1.jpg"
+               alt="Silk shirt" data-rect="500,120,420,520" />
+        </a>
+        <h3 data-rect="500,650,420,24">Printed silk shirt</h3>
+        <span class="price" data-rect="500,680,420,20">$1,150.00</span>
+      </article>
+
+      <!-- Editorial tile. No price, links to a story. Must stay pill-free. -->
+      <article class="card card--editorial" data-rect="960,120,420,620">
+        <a href="/us/en/stories/autumn-lookbook-2026" data-rect="960,120,420,520">
+          <img src="https://media.atelier-nord.com/editorial/autumn-hero.jpg"
+               alt="Autumn 2026 lookbook" data-rect="960,120,420,520" />
+        </a>
+        <h3 data-rect="960,650,420,24">The Autumn Lookbook</h3>
+      </article>
+
+    </div>
+  </main>
+</body>
+</html>

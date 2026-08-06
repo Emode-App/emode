@@ -1,0 +1,82 @@
+<!--
+  A Google results page with a Sponsored Products strip.
+
+  Modelled on what google.com/search?q=stockx actually renders: a row of cards,
+  each an /aclk redirect carrying the real destination in adurl=, with a title,
+  a price, the merchant name, and a rating.
+
+  Three traps, all of which appear on a real results page:
+
+    * the knowledge-panel photo (large, no price, links to Google itself)
+    * an organic result thumbnail with no price at all
+    * a card linking to another Google surface rather than to a shop
+
+  None of them may get a pill. "As long as such an image links to a real item so
+  it's not just pills on bullshit items" is the whole specification.
+-->
+<html>
+<head><title>stockx - Google Search</title></head>
+<body>
+  <div id="rcnt" data-rect="0,140,1440,2000">
+
+    <div class="commercial-unit" data-rect="150,200,1100,340">
+      <h3 data-rect="150,160,300,20">Sponsored Products</h3>
+
+      <div class="pla-unit" data-rect="152,205,168,300">
+        <a href="/aclk?sa=l&amp;ai=DChcSEwj&amp;adurl=https%3A%2F%2Fstockx.com%2Fnike-air-max-plus-homecoming-safety-orange%3Fsize%3D10"
+           data-rect="152,205,168,300">
+          <img src="https://encrypted-tbn0.gstatic.com/shopping?q=tbn:ANd9GcQ1"
+               alt="Nike Air Max Plus Homecoming" data-rect="152,205,168,120" />
+          <div data-rect="152,330,168,40">Nike Air Max Plus Homecoming Safe...</div>
+          <div data-rect="152,375,168,20">$882</div>
+          <div data-rect="152,400,168,20">StockX</div>
+          <div data-rect="152,425,168,20">4.0 (4)</div>
+        </a>
+      </div>
+
+      <div class="pla-unit" data-rect="338,205,168,300">
+        <a href="/aclk?sa=l&amp;adurl=https%3A%2F%2Fstockx.com%2Fjordan-5-retro-awake-ny-arctic"
+           data-rect="338,205,168,300">
+          <img src="https://encrypted-tbn0.gstatic.com/shopping?q=tbn:ANd9GcQ2"
+               alt="Jordan 5 Retro Awake NY" data-rect="338,205,168,120" />
+          <div data-rect="338,330,168,40">Jordan 5 Retro Awake NY Arctic...</div>
+          <div data-rect="338,375,168,20">$2,607</div>
+          <div data-rect="338,400,168,20">StockX</div>
+        </a>
+      </div>
+
+      <!-- Trap: a card with no price. Not a listing, no pill. -->
+      <div class="pla-unit" data-rect="524,205,168,300">
+        <a href="/aclk?sa=l&amp;adurl=https%3A%2F%2Fstockx.com%2Fabout"
+           data-rect="524,205,168,300">
+          <img src="https://encrypted-tbn0.gstatic.com/images?q=tbn:ANd9GcQ3"
+               alt="StockX marketplace" data-rect="524,205,168,120" />
+          <div data-rect="524,330,168,40">Buy and sell authentic sneakers</div>
+          <div data-rect="524,400,168,20">StockX</div>
+        </a>
+      </div>
+    </div>
+
+    <!-- Trap: knowledge panel. Big photo, links to Google, no price. -->
+    <div class="kp-wholepage" data-rect="880,620,380,600">
+      <h2 data-rect="880,600,380,40">StockX</h2>
+      <a href="https://www.google.com/search?q=StockX&amp;tbm=isch" data-rect="880,640,370,300">
+        <img src="https://encrypted-tbn0.gstatic.com/images?q=tbn:ANd9GcQkp"
+             alt="StockX storefront" data-rect="880,640,370,300" />
+      </a>
+      <div data-rect="880,950,380,20">4.1 (151K)</div>
+    </div>
+
+    <!-- Trap: organic result thumbnail. No price. -->
+    <div class="g" data-rect="150,620,700,120">
+      <a href="https://stockx.com" data-rect="150,620,700,60">
+        <img src="https://www.google.com/s2/favicons?domain=stockx.com"
+             alt="StockX" data-rect="152,622,32,32" />
+        <h3 data-rect="190,622,600,30">StockX: Sneakers, Streetwear, Trading Cards</h3>
+      </a>
+      <div data-rect="150,690,700,50">Buy and sell the hottest sneakers.</div>
+    </div>
+
+  </div>
+</body>
+</html>

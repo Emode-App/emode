@@ -1,0 +1,35 @@
+<!--
+  A collection page, not a product page.
+
+  Derived from what allbirds.com actually served on 2026-08-05: og:type=website,
+  a CollectionPage in the JSON-LD, and — the important part — an og:image
+  pointing at "logo-seo.jpg". A detector that trusts og:image without asking what
+  it depicts puts the shop's logo on a shopper's body.
+
+  Nothing here should be detected as a product.
+-->
+<html>
+<head>
+  <title>Men's Shoes | Shop Sustainable Footwear for Men</title>
+  <meta property='og:url' content='https://www.allbirds.example/collections/mens'>
+  <meta property='og:title' content="Men's Shoes | Shop Sustainable Footwear">
+  <meta property='og:type' content='website'>
+  <meta property='og:image' content='https://cdn.allbirds.example/files/logo-seo.jpg?v=1753720776'>
+  <script type="application/ld+json">
+  [{
+    "@context": "https://schema.org",
+    "@type": "CollectionPage",
+    "@id": "/collections/mens",
+    "name": "Men's Shoes",
+    "url": "/collections/mens"
+  }]
+  </script>
+</head>
+<body>
+  <main data-rect="0,0,1440,1200">
+    <h1 data-rect="40,40,600,50">Men's Shoes</h1>
+    <img src="https://cdn.allbirds.example/files/collection-banner.jpg"
+         alt="Men's shoes collection" data-rect="0,100,1440,400" />
+  </main>
+</body>
+</html>

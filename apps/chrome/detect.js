@@ -44,15 +44,27 @@
         const normalise = (v) => v.toLowerCase().replace(/[^a-z0-9]/g, '');
         const brands = [normalise(siteName), normalise(host)].filter((b) => b.length > 2);
 
-        const parts = title.split(/\s+[|–—·-]\s+/);
-        while (parts.length > 1) {
-            const tail = normalise(parts[parts.length - 1]);
-            const isSite = brands.some((b) => tail.includes(b) || b.includes(tail));
-            if (!isSite) break;
-            parts.pop();
+        // Split on separators, but rebuild by SLICING the original string rather
+        // than re-joining the parts. Re-joining printed one canonical separator
+        // back, so "Merino Wool Jacket - Charcoal | NORTHBOUND SUPPLY" came out
+        // as "Merino Wool Jacket | Charcoal" — the store name correctly gone and
+        // the garment's own name quietly rewritten. A title nothing was stripped
+        // from was still not the title the merchant wrote.
+        const separator = /\s+[|–—·-]\s+/g;
+        const cuts = [];
+        for (let m = separator.exec(title); m; m = separator.exec(title)) {
+            cuts.push({ start: m.index, end: m.index + m[0].length });
         }
 
-        title = parts.join(' | ').trim();
+        let end = title.length;
+        for (let i = cuts.length - 1; i >= 0; i--) {
+            const tail = normalise(title.slice(cuts[i].end, end));
+            const isSite = brands.some((b) => tail.includes(b) || b.includes(tail));
+            if (!isSite) break;
+            end = cuts[i].start;
+        }
+
+        title = title.slice(0, end).trim();
         return title || String(raw).trim();
     }
 
@@ -75,8 +87,17 @@
         const code = String(currency || '').trim().toUpperCase();
         if (!code) return value;
 
+        // Normalise the amount itself. Structured data is inconsistent about
+        // this - "285.00" from one store and "1250" from the next - and passing
+        // it straight through printed $285.00 beside £1250 on the same screen.
+        // A price is the one number a shopper actually reads.
+        const number = Number(value.replace(/,/g, ''));
+        const amountText = Number.isFinite(number)
+            ? number.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })
+            : value;
+
         const symbol = CURRENCY_SYMBOLS[code];
-        return symbol ? `${symbol}${value}` : `${code} ${value}`;
+        return symbol ? `${symbol}${amountText}` : `${code} ${amountText}`;
     }
 
     function absoluteUrl(src) {
@@ -293,27 +314,74 @@
      * under the title, and offering those as "wrong picture?" alternatives
      * invites the shopper to try on a shoe from another listing entirely.
      */
-    function linksElsewhere(img) {
+    /**
+     * Is this image about something other than the thing we are reading?
+     *
+     * On a product page the question is answered against the page itself: an
+     * image linking to a different URL is a recommendation - "you may also
+     * like" - and not this garment. That is what stopped the detector pulling a
+     * neighbouring listing's photo.
+     *
+     * Inside a scope it is a different question, and answering the page-level
+     * one there was a bug. A quick-view dialog is ABOUT one product and its
+     * image is routinely wrapped in a link to that product's page - the most
+     * ordinary quick-view markup there is. Judged against the current URL, that
+     * link always "points elsewhere", so every image in the dialog was thrown
+     * away and the dialog detected as nothing at all. Within a scope the subject
+     * is the scope's own primary link, not the address bar.
+     */
+    function linksElsewhere(img, scope) {
         const anchor = img.closest('a[href]');
         if (!anchor) return false;
 
         const href = anchor.getAttribute('href') || '';
         if (!href || href.startsWith('#') || href.startsWith('javascript:')) return false;
 
-        try {
-            const target = new URL(href, window.location.href);
-            if (target.origin !== window.location.origin) return true;
-            return target.pathname.replace(/\/+$/, '') !== window.location.pathname.replace(/\/+$/, '');
-        } catch {
-            return false;
+        const samePath = (a, b) => {
+            try {
+                const one = new URL(a, window.location.href);
+                const two = new URL(b, window.location.href);
+                return one.origin === two.origin &&
+                    one.pathname.replace(/\/+$/, '') === two.pathname.replace(/\/+$/, '');
+            } catch {
+                return false;
+            }
+        };
+
+        if (scope && scope !== document && scope.querySelectorAll) {
+            const subject = primaryHref(scope);
+            // No link to compare against means nothing to contradict.
+            return subject ? !samePath(href, subject) : false;
         }
+
+        return !samePath(href, window.location.href);
+    }
+
+    /**
+     * The link a scope is "about": the href shared by the most of its image
+     * links. A card or dialog usually repeats one product link across the photo,
+     * the title and a details button, so the modal href wins on count alone.
+     */
+    function primaryHref(scope) {
+        const counts = new Map();
+        for (const anchor of Array.from(scope.querySelectorAll('a[href]'))) {
+            const href = anchor.getAttribute('href') || '';
+            if (!href || href.startsWith('#') || href.startsWith('javascript:')) continue;
+            counts.set(href, (counts.get(href) || 0) + 1);
+        }
+        let best = null;
+        let bestCount = 0;
+        for (const [href, count] of counts) {
+            if (count > bestCount) { best = href; bestCount = count; }
+        }
+        return best;
     }
 
     function imageCandidates(scope) {
         return Array.from((scope || document).querySelectorAll('img'))
             .filter((img) => img.offsetParent !== null && img.naturalWidth > 150)
             .filter((img) => looksLikeProductImage(img.currentSrc || img.src))
-            .filter((img) => !linksElsewhere(img))
+            .filter((img) => !linksElsewhere(img, scope))
             .map((img) => {
                 const r = img.getBoundingClientRect();
                 return {
@@ -545,6 +613,7 @@
 
     global.emodeDetect = {
         linksElsewhere,
+        primaryHref,
         findOverlay,
         fromScope,
         onScreenArea,

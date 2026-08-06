@@ -5,10 +5,12 @@
     "scripts": {
         "build": "vite build",
         "dev": "vite",
-        "lint": "eslint ."
+        "lint": "eslint .",
+        "test": "node --test \"test/*.test.mjs\""
     },
     "devDependencies": {
         "vite": "latest",
-        "@types/chrome": "latest"
+        "@types/chrome": "latest",
+        "jsdom": "^26.0.0"
     }
 }

@@ -1,0 +1,35 @@
+<!--
+  A product page with a sticky announcement strip and a sticky add-to-bag bar.
+
+  isPinned() has to tell two fixed-position things apart: a full-width strip is
+  site chrome and its contents are not the product, while a dialog is not chrome
+  even though it is also fixed. Getting this wrong put try-on buttons in the
+  cookie banner.
+-->
+<html>
+<head>
+  <title>Leather Chelsea Boot | ATELIER NORD</title>
+  <script type="application/ld+json">
+  {"@context":"https://schema.org","@type":"Product",
+   "name":"Leather Chelsea Boot",
+   "image":"https://media.atelier-nord.com/333/chelsea-boot.jpg",
+   "offers":{"@type":"Offer","price":"1250","priceCurrency":"GBP"}}
+  </script>
+</head>
+<body>
+  <div class="announcement" style="position: fixed; top: 0" data-rect="0,0,1440,44">
+    Free shipping on orders over $200 &mdash; Add to bag now
+  </div>
+
+  <main data-rect="0,44,1440,1200">
+    <img src="https://media.atelier-nord.com/333/chelsea-boot.jpg"
+         alt="Leather Chelsea boot" data-rect="80,120,620,780" />
+    <h1 data-rect="740,120,540,60">Leather Chelsea Boot</h1>
+    <button class="add-to-bag" data-rect="740,340,300,56">Add to bag</button>
+  </main>
+
+  <div class="sticky-bar" style="position: sticky; bottom: 0" data-rect="0,844,1440,72">
+    <button data-rect="1100,856,300,48">Add to bag &mdash; &pound;1,250</button>
+  </div>
+</body>
+</html>

@@ -1,0 +1,43 @@
+<!--
+  A quick-view dialog open over a listing page.
+
+  The page's own metadata still describes the LISTING, so anything reading
+  document-level JSON-LD or OpenGraph answers about the wrong thing entirely.
+  The dialog has to win. This is why detectProduct() checks for an overlay first.
+
+  The page-level JSON-LD below deliberately names a different garment from the
+  one in the dialog, so a test cannot pass by accident.
+-->
+<html>
+<head>
+  <title>Knitwear | ATELIER NORD</title>
+  <meta property="og:title" content="Knitwear Collection" />
+  <meta property="og:image" content="https://media.atelier-nord.com/collections/knitwear-hero.jpg" />
+  <script type="application/ld+json">
+  {"@context":"https://schema.org","@type":"Product",
+   "name":"Cashmere Crew Neck — WRONG ANSWER",
+   "image":"https://media.atelier-nord.com/000000/wrong-answer.jpg",
+   "offers":{"@type":"Offer","price":"900.00","priceCurrency":"USD"}}
+  </script>
+</head>
+<body>
+  <main data-rect="0,0,1440,1600">
+    <div class="grid" data-rect="0,120,1440,1400">
+      <a href="/us/en/pr/men/knitwear/cashmere-crew-p-111"><img
+        src="https://media.atelier-nord.com/111/cashmere-crew.jpg"
+        alt="Cashmere crew" data-rect="40,120,420,520" /></a>
+    </div>
+
+    <div role="dialog" aria-modal="true" class="quickview" style="position: fixed"
+         data-rect="360,80,720,760">
+      <img src="https://media.atelier-nord.com/222/ribbed-cardigan-1.jpg"
+           alt="Ribbed cardigan" data-rect="380,100,400,600" />
+      <div class="quickview__info" data-rect="800,100,260,400">
+        <h2 data-rect="800,100,260,40">Ribbed wool cardigan</h2>
+        <span class="price" data-rect="800,150,260,24">$1,890.00</span>
+        <button data-rect="800,200,240,50">Add to bag</button>
+      </div>
+    </div>
+  </main>
+</body>
+</html>

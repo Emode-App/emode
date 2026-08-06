@@ -4,6 +4,10 @@
         "**/.env.*local"
     ],
     "tasks": {
+        // Tests need no build output and no env; they run against source.
+        "test": {
+            "outputs": []
+        },
         "build": {
             "dependsOn": [
                 "^build"

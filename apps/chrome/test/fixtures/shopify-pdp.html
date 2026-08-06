@@ -1,0 +1,67 @@
+<!--
+  Shopify product page, Dawn-shaped.
+
+  The single most common thing this extension will ever meet. JSON-LD with a
+  @graph wrapper, an image array, a nested offers object, and a title carrying
+  the store name — all four of which are the normal case, not edge cases.
+-->
+<html>
+<head>
+  <title>Merino Wool Jacket - Charcoal | NORTHBOUND SUPPLY</title>
+  <meta property="og:title" content="Merino Wool Jacket - Charcoal" />
+  <meta property="og:image" content="https://cdn.shopify.com/s/files/1/0001/jacket-og.jpg?v=1712" />
+  <meta property="og:type" content="product" />
+  <script type="application/ld+json">
+  {
+    "@context": "https://schema.org",
+    "@graph": [
+      { "@type": "BreadcrumbList", "itemListElement": [] },
+      { "@type": "Organization", "name": "Northbound Supply" },
+      {
+        "@type": "Product",
+        "name": "Merino Wool Jacket - Charcoal | NORTHBOUND SUPPLY",
+        "sku": "NB-4471-CH",
+        "image": [
+          "https://cdn.shopify.com/s/files/1/0001/jacket-front_1800x.jpg?v=1712",
+          "https://cdn.shopify.com/s/files/1/0001/jacket-back_1800x.jpg?v=1712"
+        ],
+        "offers": {
+          "@type": "Offer",
+          "price": "285.00",
+          "priceCurrency": "USD",
+          "availability": "https://schema.org/InStock"
+        }
+      }
+    ]
+  }
+  </script>
+</head>
+<body>
+  <header data-rect="0,0,1440,80">
+    <a href="/"><img src="https://cdn.shopify.com/s/files/1/0001/logo.svg" alt="Northbound Supply" data-rect="20,20,120,40" /></a>
+  </header>
+
+  <main data-rect="0,80,1440,1200">
+    <div class="product__media" data-rect="80,120,620,780">
+      <img src="https://cdn.shopify.com/s/files/1/0001/jacket-front_1800x.jpg?v=1712"
+           alt="Merino Wool Jacket - Charcoal" data-rect="80,120,620,780" />
+    </div>
+
+    <div class="product__info" data-rect="740,120,540,600">
+      <h1 data-rect="740,120,540,60">Merino Wool Jacket - Charcoal</h1>
+      <span class="price" data-rect="740,190,200,30">$285.00</span>
+
+      <form>
+        <fieldset data-rect="740,240,540,80">
+          <legend>Size</legend>
+          <label><input type="radio" name="size" value="S" />S</label>
+          <label><input type="radio" name="size" value="M" />M</label>
+        </fieldset>
+        <button type="submit" name="add" class="product-form__submit" data-rect="740,340,300,56">
+          Add to cart
+        </button>
+      </form>
+    </div>
+  </main>
+</body>
+</html>
