@@ -284,7 +284,7 @@ function renderCart(items) {
     cartTotal.textContent = `$${total.toFixed(2)}`;
 
     if (items.length === 0) {
-        cartList.innerHTML = `<div class="empty-state" style="grid-column: span 2;">No items saved yet.<br />Add items while browsing to build your cart.</div>`;
+        cartList.innerHTML = `<div class="empty-state" style="grid-column: span 2;">Nothing saved yet.<br />Add items while browsing and they collect here, from any shop.</div>`;
         return;
     }
 

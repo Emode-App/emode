@@ -61,6 +61,25 @@ function notifyProductDetected(context) {
 }
 
 // Persist a locally-tracked cart item (no account required) and notify the side panel
+/**
+ * Everything the shopper has saved, across every shop they saved it from.
+ *
+ * chrome.storage.local is the only store in this system that is not partitioned
+ * by the site being viewed, which makes it the only correct home for a list
+ * whose whole point is spanning sites.
+ */
+function readSavedItems() {
+    return new Promise((resolve) => {
+        try {
+            chrome.storage.local.get({ emode_cart: [] }, (result) => {
+                resolve(Array.isArray(result?.emode_cart) ? result.emode_cart : []);
+            });
+        } catch {
+            resolve([]);
+        }
+    });
+}
+
 function addToLocalCart(context) {
     if (!context) return;
     try {
@@ -209,162 +228,215 @@ function global_detect() {
     return (typeof window !== 'undefined' && window.emodeDetect) || null;
 }
 
-// A product card is a picture you can click to buy the thing in it. Editorial
-// photography, hero banners, lookbook stills and article thumbnails are not,
-// however much they look alike.
-// Product URLs, as actually written in the wild. Gucci alone uses /pr/ for the
-// path and hangs the style code off the end as "-p-8202981ABAP9754", matching
-// neither /product/ nor /p/.
-const PRODUCT_HREF_RE =
-    // A path segment that names a product...
-    /\/(products?|pr|p|item|items|dp|sku|prod|listing|productpage)(\/|\?|$)/i.source +
-    // ...or Gucci's "-p-8202981ABAP9754". The second hyphen is load-bearing:
-    // without it "-p" followed by letters matches "-pants" and "-polo".
-    '|' + /-p-[a-z0-9]{4,}/i.source +
-    // ...or Zara's "-p04302400.html", where the code runs straight on from -p
-    // and is always digits.
-    '|' + /-p\d{4,}/i.source +
-    // ...or a bare numeric style code, which may be followed by a file
-    // extension rather than ending the path - H&M writes
-    // "productpage.1234567001.html". Requiring the digits to END the path is
-    // what made this miss every store that serves .html.
-    '|' + /[-.]\d{5,}(\.html?|\/|\?|$)/i.source;
+/**
+ * What makes something a product, stated once.
+ *
+ * A picture, a price, and a name, in the same vicinity. That is the whole rule,
+ * and it is the rule because it is what every clothing listing on the internet
+ * has in common. A shop that does not show you those three things is not
+ * selling you anything.
+ *
+ * What this replaced was a list of URL shapes: /products/, /p/, Gucci's
+ * "-p-<code>", Zara's "-p<digits>.html", H&M's "productpage.<digits>". Every new
+ * store meant a new shape and a new bug, and a store with opaque URLs was
+ * unreachable no matter how obviously it was a shop. Matching the address
+ * instead of the contents was the mistake.
+ *
+ * A price, in any currency a storefront actually prints. This check used to be
+ * dollars only, so every store selling in pounds, euros or yen failed the single
+ * test that decides whether something is a product. Not an edge case: most of
+ * the web.
+ *
+ * The currency mark is required precisely so a rating ("4.1 (151K)") or a size
+ * ("10.5") cannot pass for money.
+ */
+const PRICE_RE =
+    /(?:[$\u00a3\u20ac\u00a5\u20a9\u20b9]|\b(?:USD|EUR|GBP|CAD|AUD|JPY|CHF|SEK|NOK|DKK|PLN)\b)\s?\d[\d.,]*|\d[\d.,]*\s?(?:[$\u00a3\u20ac\u00a5]|\b(?:USD|EUR|GBP|CHF|SEK|NOK|DKK|PLN)\b)/;
 
-const PRODUCT_HREF_RE_COMPILED = new RegExp(PRODUCT_HREF_RE, 'i');
+// Links that are about reading rather than buying. The only URL rule left, and
+// it is a veto rather than a gate: a story can sit in a product grid, but no URL
+// shape is required to prove something IS a product.
 const EDITORIAL_HREF_RE = /\/(stories|story|blog|article|news|guides?|lookbook|editorial|magazine|journal|about|help|careers)(\/|\?|$)/i;
 
+/**
+ * Is this image a product? Picture, price, name — in the same vicinity.
+ *
+ * That is the entire test now. It used to also require the image to sit inside
+ * a URL matching a list of shapes (/products/, /p/, "-p-<code>", "-p<digits>"),
+ * which meant every unfamiliar store was a bug report and stores with opaque
+ * URLs could never work at all. The URL told us nothing the page was not already
+ * saying more reliably.
+ *
+ * Removing it costs nothing in precision, because the price is what was doing
+ * the real work: a magazine tile in a product grid has a photo and a headline
+ * and no price, which is exactly why it fails — not because of its href.
+ */
 function isValidProductCard(img) {
     if (!img || img.tagName !== 'IMG') return false;
 
-    // Size floor by area and shape, not by both edges.
-    //
-    // Requiring width >= 150 AND height >= 150 assumed every product image is at
-    // least square. Zara's grid is roughly 145x190 - taller than it is wide, like
-    // most garment photography - so every card on the page failed a check about
-    // its width while being comfortably larger than the threshold was trying to
-    // express. A five-column grid on a laptop is not an unusual layout; it is the
-    // common one.
-    //
-    // Area still excludes the small furniture the floor existed for, and the
-    // minimum edge still excludes a wide thin banner, which area alone would let
-    // through.
+    // Size floor by area and shortest edge, not by both edges. Requiring
+    // width >= 150 AND height >= 150 assumed every product image is at least
+    // square; garment photography is usually taller than it is wide, so a normal
+    // five-column grid failed a check about its width while being comfortably
+    // bigger than that check was trying to express.
     const rect = img.getBoundingClientRect();
-    const MIN_AREA = 150 * 150;
-    const MIN_EDGE = 100;
-    if (rect.width * rect.height < MIN_AREA) return false;
-    if (Math.min(rect.width, rect.height) < MIN_EDGE) return false;
+    if (rect.width * rect.height < 150 * 150) return false;
+    if (Math.min(rect.width, rect.height) < 100) return false;
 
-    // The image must itself be the clickable target of a product link.
-    //
-    // Without this the check leant on findProductContainer, which walks upward
-    // until the container dwarfs the image — on a homepage that swallows a whole
-    // section, so prices and product links belonging to entirely different
-    // modules counted as this image's own. A magazine still on Lyst's front page
-    // passed, and the try-on pill appeared over an article photo. It is why the
-    // buttons turned up on "damn near any picture" while browsing.
+    // A link to a story is a story even when it sits in a product grid. The only
+    // surviving URL rule, and it is a veto, never a requirement.
     const anchor = img.closest('a[href]');
-    if (!anchor) return false;
+    if (anchor && EDITORIAL_HREF_RE.test(anchor.getAttribute('href') || '')) return false;
 
-    const href = anchor.getAttribute('href') || '';
-    if (EDITORIAL_HREF_RE.test(href)) return false;
-    if (!PRODUCT_HREF_RE_COMPILED.test(href)) return false;
+    // Price, in this image's own card rather than a neighbour's.
+    const card = findProductCard(img);
+    if (!card) return false;
 
-    // Find container
-    const container = findProductContainer(img);
-    if (!container) {
-        console.log('[emodeAI] No container found for image');
-        return false;
-    }
-
-    const containerText = container.innerText || '';
-
-    // Check if there's a price nearby (preferred but not required)
-    const hasPrice = /\$\s?\d+/.test(containerText);
-
-    // Check for product page link (many catalog items link to product pages)
-    const hasProductLink = container.querySelector('a[href*="/product"], a[href*="/p/"], a[href*="/item"], a[href*="/products"]');
-
-    // Check for title or valid image alt
-    const hasValidAlt = img.alt && img.alt.trim().length > 3 && !isGenericTitle(img.alt);
-
-    // Look for text elements near the image (within 200px below)
-    const imgRect = img.getBoundingClientRect();
-    const nearbyTextElements = Array.from(container.querySelectorAll('span, div, p, h1, h2, h3, h4, a'))
-        .filter(el => {
-            if (el.children.length > 0) return false;
-            const elRect = el.getBoundingClientRect();
-            const text = el.innerText?.trim() || '';
-
-            // Must be below the image and close horizontally
-            const verticalDist = elRect.top - imgRect.bottom;
-            const horizontalDist = Math.abs(elRect.left - imgRect.left);
-
-            return text.length > 3 &&
-                   !text.includes('$') &&
-                   verticalDist > -30 && verticalDist < 200 &&
-                   horizontalDist < 300 &&
-                   el.offsetWidth > 0 &&
-                   !ECOM_KEYWORDS.some(k => text.toUpperCase().includes(k));
-        });
-
-    const hasNearbyTitle = nearbyTextElements.length > 0;
-
-    // Price is now required, not merely preferred. A product card without a
-    // price on it is usually not a product card.
-    const isValid = hasPrice && (hasValidAlt || hasNearbyTitle);
-
-    console.log('[emodeAI] Product Card Validation:', {
-        imgSrc: img.src.substring(0, 50),
-        hasPrice,
-        hasProductLink: !!hasProductLink,
-        hasValidAlt,
-        imgAlt: img.alt,
-        nearbyTitleCount: nearbyTextElements.length,
-        hasNearbyTitle,
-        isValid
-    });
-
-    // Valid if: (has price OR has product link) AND (has valid alt OR has nearby title)
-    return isValid;
+    // Name. The alt text when it says something, otherwise a line of text in the
+    // card that is not the price and not a button.
+    return !!readCardTitle(card, img);
 }
 
+/**
+ * The product's name, as printed on the card.
+ *
+ * Prefers the longest candidate rather than the first. Shops put the brand and
+ * the model in separate elements ("Rick Owens" above "Low Sneaker"), and taking
+ * whichever came first in the DOM is how a $189 sneaker ended up in someone's
+ * dressing room called "Low Sneaker" with no brand attached to it at all.
+ */
+function readCardTitle(card, img) {
+    if (!card) return '';
 
-function findProductContainer(img) {
-    // Find the smallest container that includes both image and price
-    let parent = img.parentElement;
-    let depth = 0;
-    let bestContainer = img.parentElement;
+    const candidates = [];
 
-    while (parent && depth < 8) {
-        const text = parent.innerText || '';
-        const hasPrice = /\$\s?\d+/.test(text);
-
-        if (hasPrice) {
-            bestContainer = parent;
-            // Keep looking for a slightly larger container that might include title
-            // but stop if we get too large (more than 3x the image size)
-            const parentRect = parent.getBoundingClientRect();
-            const imgRect = img.getBoundingClientRect();
-            const sizeRatio = (parentRect.width * parentRect.height) / (imgRect.width * imgRect.height);
-
-            if (sizeRatio > 15) {
-                // Container is too large, previous one was better
-                break;
-            }
-        }
-
-        parent = parent.parentElement;
-        depth++;
+    for (const el of card.querySelectorAll('h1, h2, h3, h4, h5, a, span, div, p, b, strong')) {
+        if (el.children.length) continue;
+        const text = (el.innerText || '').trim().replace(/\s+/g, ' ');
+        if (text.length < 3 || text.length > 160) continue;
+        if (PRICE_RE.test(text)) continue;
+        if (isGenericTitle(text)) continue;
+        if (ECOM_KEYWORDS.some((k) => text.toUpperCase().includes(k))) continue;
+        // Ratings, counts, badges, sizes.
+        if (/^[\d.,%()\s★☆*-]+$/.test(text)) continue;
+        if (/^(sale|new|sold out|free shipping|in stock|sponsored|ad)$/i.test(text)) continue;
+        candidates.push(text);
     }
 
-    return bestContainer;
+    // Brand + model split across two elements: "Rick Owens" then "Low Sneaker".
+    //
+    // Only when the FIRST line is short. A brand sits above the model and is
+    // brief; if the first line is already long it is the product name, and the
+    // line under it is the shop's own name - which is how a sneaker came out
+    // called "Nike Air Max Plus Homecoming Safe... StockX".
+    if (candidates.length > 1) {
+        const [first, second] = candidates;
+        if (first.length <= 30 && second.length > first.length && second.length <= 90 &&
+            !isTruncated(first) &&
+            !second.toLowerCase().includes(first.toLowerCase())) {
+            candidates.push(`${first} ${second}`);
+        }
+    }
+
+    const alt = (img?.alt || '').trim();
+    if (alt.length > 3 && !isGenericTitle(alt)) candidates.push(alt);
+
+    // Longest wins - a name carrying the brand beats a bare model name - but a
+    // line the shop had to cut off with an ellipsis loses to a complete one even
+    // when it is longer. A truncated name is the one thing worse than a short
+    // one: it looks like the real name and is not.
+    candidates.sort((a, b) =>
+        (isTruncated(a) - isTruncated(b)) || (b.length - a.length));
+    return candidates[0] || '';
+}
+
+function isTruncated(text) {
+    return /(\.\.\.|…)\s*$/.test(text || '') ? 1 : 0;
+}
+
+function findProductCard(img) {
+    let node = img.parentElement;
+    let last = null;
+
+    for (let depth = 0; node && depth < 10; depth++) {
+        if (node === document.body || node === document.documentElement) break;
+
+        // Crossed into a container holding more than one purchasable thing.
+        // Everything from here up describes a collection, not this product.
+        if (countDestinations(node) > 1) break;
+
+        last = node;
+        if (PRICE_RE.test(node.innerText || '')) return node;
+        node = node.parentElement;
+    }
+
+    // No price found anywhere that still belonged to this image alone.
+    return null;
+}
+
+/**
+ * How many distinct things this element links to that are not each other.
+ *
+ * Cards repeat one destination across the photo, the title and a details
+ * button, so counting anchors would call every card a grid. Counting distinct
+ * destinations is what separates "one product described three times" from "two
+ * products side by side".
+ */
+function countDestinations(el) {
+    const seen = new Set();
+    for (const a of el.querySelectorAll('a[href]')) {
+        const key = destinationKey(a.getAttribute('href'));
+        if (key) seen.add(key);
+    }
+    return seen.size;
+}
+
+/**
+ * Where a link actually goes, as a comparable string.
+ *
+ * Redirects have to be seen through, and not as a favour to any one site.
+ * Google's ad links are all "/aclk?...&adurl=<real>", so keying on the path
+ * alone made every sponsored product on a results page look like the SAME
+ * destination - which meant the strip of six cards read as one card, and an
+ * unpriced tile happily inherited the price two products over. Affiliate
+ * networks, Bing and Skimlinks all wrap links the same way.
+ *
+ * So: if any query parameter is itself an http(s) URL, that is the destination.
+ * Otherwise the path is. This is a statement about how redirects work, not about
+ * any particular shop.
+ */
+function destinationKey(href) {
+    if (!href || href.startsWith('#') || href.startsWith('javascript:')) return null;
+    let url;
+    try {
+        url = new URL(href, window.location.href);
+    } catch {
+        return null;
+    }
+
+    for (const value of url.searchParams.values()) {
+        if (!/^https?%3A|^https?:/i.test(value)) continue;
+        try {
+            const inner = new URL(value);
+            if (inner.protocol === 'http:' || inner.protocol === 'https:') {
+                return inner.origin + inner.pathname.replace(/\/+$/, '');
+            }
+        } catch { /* not a URL after all */ }
+    }
+    return url.origin + url.pathname.replace(/\/+$/, '');
+}
+
+// Kept under the old name: plenty of call sites still ask for "the container".
+function findProductContainer(img) {
+    return findProductCard(img);
 }
 
 function parsePrice(text) {
     if (!text) return Infinity;
-    // Improved regex to capture the entire numeric group: $1,565.00
-    // Matches $ followed by digits, commas, and dots.
-    const match = text.match(/\$\s?([\d,.]+)/);
+    // Any currency, not just dollars. This matched $ alone, so a European
+    // store's price sorted as Infinity and the cheapest-variant logic picked
+    // arbitrarily.
+    const match = text.match(/(?:[$£€¥₩₹]|USD|EUR|GBP|CHF)\s?([\d,.]+)/);
     if (!match) return Infinity;
 
     let raw = match[1];
@@ -501,7 +573,7 @@ function extractFromContainer(container, img) {
 
     // 2. Find ALL Prices near the image and pick the CHEAPEST ACTIVE price
     const priceElements = Array.from(container.querySelectorAll('*'))
-        .filter(el => el.children.length === 0 && /\$\s?\d+/.test(el.textContent) && el.offsetWidth > 0)
+        .filter(el => el.children.length === 0 && PRICE_RE.test(el.textContent) && el.offsetWidth > 0)
         .filter(el => !isStruckThrough(el));
 
     const priceValues = priceElements.map(el => {
@@ -723,7 +795,7 @@ function extractProductContextHeuristic() {
         .filter(el => {
             const text = el.innerText?.trim() || '';
             const rect = el.getBoundingClientRect();
-            return text.length > 0 && text.length < 30 && /\$\s?\d+/.test(text) && rect.width > 0 && !isStruckThrough(el);
+            return text.length > 0 && text.length < 30 && PRICE_RE.test(text) && rect.width > 0 && !isStruckThrough(el);
         });
 
     const pricesWithStyles = allPrices.map(el => {
@@ -877,12 +949,33 @@ function openModal(context) {
     const handoffImages = (context.alternateImages || []).slice(0, 8);
     const onModalReady = (event) => {
         if (event.origin !== BASE_URL) return;
-        if (event.data && event.data.type === 'emode:ready' && handoffImages.length > 1) {
+        if (!event.data || event.data.type !== 'emode:ready') return;
+
+        if (handoffImages.length > 1) {
             iframe.contentWindow?.postMessage(
                 { type: 'emode:image-options', images: handoffImages },
                 BASE_URL
             );
         }
+
+        // Hand over the whole dressing room, every time.
+        //
+        // This is why items kept disappearing. The modal kept the guest room in
+        // its own localStorage, and a third-party iframe's storage is partitioned
+        // by the TOP-LEVEL site: a dress saved while on lyst.com and a shoe saved
+        // while on google.com landed in two different, mutually invisible
+        // buckets. Neither was lost, exactly - they were filed under the shop the
+        // shopper happened to be standing in, which is useless for a dressing
+        // room whose entire purpose is collecting across shops.
+        //
+        // The extension is the one place with an unpartitioned view, so the
+        // extension owns the list and the modal is told what is in it.
+        readSavedItems().then((items) => {
+            iframe.contentWindow?.postMessage(
+                { type: 'emode:dressing-room', items },
+                BASE_URL
+            );
+        });
     };
     window.addEventListener('message', onModalReady);
     Object.assign(iframe.style, {
@@ -1166,10 +1259,24 @@ for (const method of ['pushState', 'replaceState']) {
 }
 window.addEventListener('popstate', () => setTimeout(scheduleScan, 300));
 
-// Product data frequently arrives after first paint — JSON-LD injected by the
-// framework, images still decoding. Give detection a few more looks.
+// Product data frequently arrives well after first paint - JSON-LD injected by
+// the framework, prices fetched separately, images still decoding, a review
+// widget that reflows the buy button when it lands.
+//
+// The MutationObserver catches most of that, but not a page whose product
+// section is server-rendered into a container that never mutates again, and not
+// one whose late work happens inside a shadow root. Retries over the first few
+// seconds cost nothing - a scan on a page with nothing to find is a handful of
+// querySelectorAll calls - and they are the difference between "the buttons are
+// missing on this shop" and "the buttons took a moment".
+//
+// Bounded on purpose: a page that has not produced a product in five seconds is
+// not going to, and polling forever on every tab is how an extension earns a
+// reputation for slowing the browser down.
 scheduleScan();
-setTimeout(scheduleScan, 800);
+for (const delay of [400, 1000, 2000, 3500, 5000]) {
+    setTimeout(scheduleScan, delay);
+}
 setTimeout(scheduleScan, 2000);
 
 // Floating Pill Logic (Catalog only)
@@ -1366,10 +1473,24 @@ document.addEventListener('mouseover', (e) => {
             trigger._emodeHideTimer = null;
         }
 
-        const rect = target.getBoundingClientRect();
-        trigger.style.top = `${rect.top + window.scrollY + 20}px`;
-        trigger.style.left = `${rect.left + window.scrollX + 20}px`;
+        // Centre it on the card rather than pinning it 20px inside the image's
+        // top-left corner. Offset from a corner means the pill hangs off-centre
+        // on every card that is not the size the offset was chosen for, and on a
+        // narrow card it overhangs the edge entirely. Measured after display so
+        // the width is the real one.
+        trigger.style.visibility = 'hidden';
         trigger.style.display = 'flex';
+
+        const rect = target.getBoundingClientRect();
+        const pill = trigger.getBoundingClientRect();
+        const left = rect.left + window.scrollX + (rect.width - pill.width) / 2;
+        const top = rect.top + window.scrollY + (rect.height - pill.height) / 2;
+
+        // Never let it hang outside the viewport horizontally.
+        const maxLeft = window.scrollX + window.innerWidth - pill.width - 8;
+        trigger.style.left = `${Math.max(window.scrollX + 8, Math.min(left, maxLeft))}px`;
+        trigger.style.top = `${top}px`;
+        trigger.style.visibility = 'visible';
     }
 });
 
@@ -1475,18 +1596,7 @@ function googleDestination(href) {
     return null;
 }
 
-// How many distinct merchant destinations live under this element. More than
-// one means it is a strip of cards, not a card.
-function countProductLinks(el) {
-    const seen = new Set();
-    for (const a of el.querySelectorAll('a[href]')) {
-        const dest = googleDestination(a.getAttribute('href'));
-        if (dest) seen.add(dest);
-    }
-    return seen.size;
-}
 
-const GOOGLE_PRICE_RE = /(?:[$£€]|USD|EUR|GBP)\s?\d[\d,]*(?:\.\d{2})?/;
 
 /**
  * Read a Google result card, given an image inside it.
@@ -1498,57 +1608,32 @@ function extractFromGoogleCard(img) {
     const anchor = img.closest('a[href]');
     if (!anchor) return null;
 
+    // The only thing genuinely special about a results page: the href is a
+    // redirect, so the real destination has to be unwrapped before anything
+    // else can be decided. Everything after this point is the same rule used
+    // everywhere else - picture, price, name, same vicinity.
     const destination = googleDestination(anchor.getAttribute('href'));
     if (!destination) return null;
 
-    // Walk up to the card, and stop at the card.
-    //
-    // Climbing a fixed number of levels looking for a price is the same mistake
-    // that put pills on magazine photos: a container holding several cards has
-    // a price in it, just not this card's. On a results page it meant an
-    // unpriced tile - "Buy and sell authentic sneakers" - inherited the $882
-    // from the listing two cards over and offered a try-on for a page that
-    // sells nothing.
-    //
-    // An ancestor holding more than one outbound product link is not one card,
-    // so the walk stops before it.
-    let card = anchor;
-    let price = '';
-    for (let i = 0; i < 6 && card; i++) {
-        if (i > 0 && countProductLinks(card) > 1) break;
-        const match = (card.innerText || '').match(GOOGLE_PRICE_RE);
-        if (match) { price = match[0]; break; }
-        card = card.parentElement;
-    }
-    if (!price || !card) return null;
-
-    // A favicon or a rating star is not a garment. The hover handler applies its
-    // own floor, but the reader must not depend on its caller for that.
+    // A favicon or a rating star is not a garment.
     const rect = img.getBoundingClientRect();
     if (rect.width < 60 || rect.height < 60) return null;
 
-    // Title: the longest non-price line in the card that is not the merchant
-    // name or Google's own chrome. Merchant names are short and repeat across
-    // every card in the strip, so length is a decent discriminator here.
-    const lines = (card.innerText || '')
-        .split('\n')
-        .map((l) => l.trim())
-        .filter((l) =>
-            l.length > 8 &&
-            !GOOGLE_PRICE_RE.test(l) &&
-            !/^(sponsored|visit|ad|shop now|free (shipping|delivery)|in stock|by )/i.test(l) &&
-            !/^\d+(\.\d+)?\s*(star|\()/i.test(l));
+    const card = findProductCard(img);
+    if (!card) return null;
 
-    const title = lines.sort((a, b) => b.length - a.length)[0] || img.alt || '';
+    const price = (card.innerText || '').match(PRICE_RE);
+    if (!price) return null;
+
+    const title = readCardTitle(card, img);
     if (!title || title.length < 5) return null;
 
     return {
         title: cleanGoogleTitle(title),
         image: img.currentSrc || img.src,
-        price,
+        price: price[0],
         alternateImages: [],
-        // Where the pill should send them, and what we resolve a full-size
-        // product image from.
+        // Where the pill sends them, and what a full-size image is resolved from.
         sourceUrl: destination,
     };
 }

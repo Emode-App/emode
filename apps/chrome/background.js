@@ -1,3 +1,25 @@
+/**
+ * The name a shopper would recognise.
+ *
+ * "Rick Owens Women's Low Sneaker - Blue" and "Low Sneaker" are the same shoe,
+ * and one of them is useless in a dressing room. Length is a decent proxy for
+ * which carries the brand, but only when the longer one actually contains the
+ * shorter - otherwise they are describing different things and the first one
+ * seen is the safer keep.
+ */
+function pickRicherTitle(existing, incoming) {
+    const a = (existing || '').trim();
+    const b = (incoming || '').trim();
+    if (!a) return b;
+    if (!b) return a;
+    if (a === b) return a;
+
+    const norm = (t) => t.toLowerCase().replace(/[^a-z0-9]/g, '');
+    if (norm(b).includes(norm(a))) return b;
+    if (norm(a).includes(norm(b))) return a;
+    return a;
+}
+
 /* ------------------------------------------------------------------ *
  * Full-size product image for a search-results card                   *
  * ------------------------------------------------------------------ */
@@ -158,11 +180,46 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
     if (message.type === 'CART_ADD' && message.item) {
         chrome.storage.local.get({ emode_cart: [] }, (result) => {
             const cart = result.emode_cart || [];
-            const isDuplicate = cart.some((i) => i.image === message.item.image && i.title === message.item.title);
-            if (!isDuplicate) {
+
+            // Identity is the product's URL, not its picture.
+            //
+            // Matching on image AND title meant the same sneaker saved twice -
+            // once from a search card carrying a gstatic thumbnail, once from the
+            // shop with the merchant's own photo - had two different images and
+            // so counted as two different shoes. The list showed "Low Sneaker"
+            // twice. The URL is the only thing that stays the same no matter
+            // which surface it was saved from.
+            const key = (item) => {
+                if (!item?.url) return null;
+                try {
+                    const url = new URL(item.url);
+                    return url.origin + url.pathname.replace(/\/+$/, '');
+                } catch {
+                    return item.url;
+                }
+            };
+
+            const incoming = key(message.item);
+            const existingIndex = incoming
+                ? cart.findIndex((i) => key(i) === incoming)
+                : cart.findIndex((i) => i.image === message.item.image && i.title === message.item.title);
+
+            if (existingIndex >= 0) {
+                // Re-saving is not a no-op: the second visit usually knows more.
+                // A card seen on the shop's own page carries a better title and a
+                // full-size image than the same item seen in a search result, and
+                // silently discarding that keeps the worse of the two forever.
+                const existing = cart[existingIndex];
+                cart[existingIndex] = {
+                    ...existing,
+                    title: pickRicherTitle(existing.title, message.item.title),
+                    image: message.item.image || existing.image,
+                    price: message.item.price || existing.price,
+                };
+            } else {
                 cart.push({ ...message.item, id: crypto.randomUUID(), addedAt: Date.now() });
-                chrome.storage.local.set({ emode_cart: cart });
             }
+            chrome.storage.local.set({ emode_cart: cart });
         });
     }
 

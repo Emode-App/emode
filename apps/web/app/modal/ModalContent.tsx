@@ -106,12 +106,24 @@ export function ModalContent({ initialProduct, onClose }: ModalContentProps) {
     const needsHandoff = /^https?:\/\/(localhost|127\.|\[?::1\]?|10\.|192\.168\.|172\.(1[6-9]|2\d|3[01])\.)|^https?:\/\/[^/]*\.(local|test|localhost)(:|\/|$)/i
         .test(rawImageParam);
     const [handoffSettled, setHandoffSettled] = useState(!needsHandoff);
+    const [handedOverItems, setHandedOverItems] = useState<any[] | null>(null);
 
     useEffect(() => {
         if (window.parent === window) return; // Not embedded — nothing to receive.
 
         const onMessage = (e: MessageEvent) => {
             if (e.source !== window.parent) return;
+            // The extension owns the cross-site dressing room, because a
+            // third-party iframe's localStorage is partitioned by the site being
+            // viewed - so a dress saved on one shop and a shoe saved on another
+            // were filed in two buckets that could never see each other. Merged
+            // rather than replaced: whatever this modal already loaded for a
+            // signed-in shopper is still theirs.
+            if (e.data?.type === 'emode:dressing-room') {
+                const incoming = Array.isArray(e.data.items) ? e.data.items : [];
+                if (incoming.length) setHandedOverItems(incoming);
+                return;
+            }
             if (e.data?.type === 'emode:image-options') {
                 const list = Array.isArray(e.data.images) ? e.data.images : [];
                 setImageOptions(list.filter((u: unknown) => typeof u === 'string').slice(0, 8));
@@ -245,6 +257,36 @@ export function ModalContent({ initialProduct, onClose }: ModalContentProps) {
         autoAdded.current = true;
         handleAddToDressingRoom();
     }, [hydrated, handoffSettled, searchParams]);
+
+    // Fold the extension's list in once both it and the local room have loaded.
+    // Keyed by URL, because the same garment saved from a search result and from
+    // the shop itself carries two different images and would otherwise appear
+    // twice.
+    useEffect(() => {
+        if (!hydrated || !handedOverItems?.length) return;
+        setDressingRoomItems((prev) => {
+            const keyOf = (item: any) => {
+                if (!item?.url) return (item?.title || '').toLowerCase();
+                try {
+                    const url = new URL(item.url);
+                    return url.origin + url.pathname.replace(/\/+$/, '');
+                } catch {
+                    return item.url;
+                }
+            };
+            const seen = new Set(prev.map(keyOf));
+            const additions = handedOverItems
+                .filter((item) => item?.title && !seen.has(keyOf(item)))
+                .map((item) => ({
+                    id: item.id || crypto.randomUUID(),
+                    title: item.title,
+                    image: item.image,
+                    price: item.price,
+                    url: item.url,
+                }));
+            return additions.length ? [...prev, ...additions] : prev;
+        });
+    }, [hydrated, handedOverItems]);
 
     // Guests have no server-side room, so this is the only thing that survives
     // the widget destroying the iframe on close.

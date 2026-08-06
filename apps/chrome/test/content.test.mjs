@@ -206,3 +206,49 @@ describe('not competing with the merchant', () => {
         } finally { ctx.close(); }
     });
 });
+
+describe('actually drawing the buttons', () => {
+    // Detection being right is not the same as buttons appearing, and until now
+    // only detection was tested. Every "there are no buttons on this site"
+    // report lands in this gap.
+    test('a product page gets buttons', () => {
+        const ctx = mountContentFixture('shopify-pdp', {
+            url: 'https://lukes.store/products/dior-b31-teal-hiking-sneakers',
+        });
+        try {
+            assert.equal(ctx.window.isPDP(), true, 'a PDP must be recognised');
+            ctx.window.injectButtons();
+            assert.ok(
+                ctx.document.querySelector('[class*="emode"], [id*="emode"]'),
+                'buttons must be inserted into the page'
+            );
+        } finally { ctx.close(); }
+    });
+
+    test('buttons land next to the buy control, not at the end of the page', () => {
+        const ctx = mountContentFixture('shopify-pdp', {
+            url: 'https://lukes.store/products/dior-b31-teal-hiking-sneakers',
+        });
+        try {
+            ctx.window.injectButtons();
+            const group = ctx.document.querySelector('[class*="emode"]');
+            const form = ctx.document.querySelector('form');
+            assert.ok(form.contains(group), 'the try-on buttons belong beside Add to cart');
+        } finally { ctx.close(); }
+    });
+
+    test('a store with emode already installed gets none', () => {
+        // Two sets of try-on buttons on one product looks broken, and it is the
+        // paying merchant's install that looks broken.
+        const ctx = mountContent(
+            `<html><body><div class="emode-buttons"></div>
+             <h1 data-rect="0,0,400,40">Jacket</h1>
+             <button data-rect="0,60,200,50">Add to cart</button></body></html>`,
+            { url: 'https://shop.example.com/products/jacket' }
+        );
+        try {
+            ctx.window.injectButtons();
+            assert.equal(ctx.document.querySelectorAll('.emode-extension-injected').length, 0);
+        } finally { ctx.close(); }
+    });
+});

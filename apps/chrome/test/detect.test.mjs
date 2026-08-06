@@ -13,7 +13,7 @@
 
 import { test, describe } from 'node:test';
 import assert from 'node:assert/strict';
-import { mount, mountFixture, mountContentFixture } from './harness.mjs';
+import { mount, mountContent, mountFixture, mountContentFixture } from './harness.mjs';
 
 // The Shopify fixture is served from its own domain, which is where the
 // store-name strip gets its signal in the wild.
@@ -196,40 +196,25 @@ describe('listing pages', () => {
     });
 });
 
-describe('Zara-shaped listing pages', () => {
-    // Two independent reasons no pill ever appeared on zara.com, both of which
-    // are the common case rather than the exotic one.
+describe('what makes something a product', () => {
+    // The rule, stated once and tested once: a picture, a price, and a name, in
+    // the same vicinity. No URL shape is required to prove anything.
     //
-    // These mount content.js, which installs a polling interval, so every one
-    // closes its window - a leaked interval keeps the test runner alive forever.
+    // This replaced a list of per-store URL patterns - /products/, /p/, Gucci's
+    // "-p-<code>", Zara's "-p<digits>.html" - where every unfamiliar shop was a
+    // new bug report and a shop with opaque URLs could never work at all.
     const ZARA = 'https://www.zara.com/us/en/man-new-in-l711.html';
     const withZara = (fn) => {
         const ctx = mountContentFixture('zara-grid', { url: ZARA });
         try { fn(ctx); } finally { ctx.close(); }
     };
 
-    test('a style code running straight on from -p is a product URL', () => {
-        // Zara writes "-p04302400.html". The pattern knew Gucci's "-p-<code>"
-        // and required digits to END the path, so every Zara card was rejected
-        // as a non-product link.
-        withZara(({ constants }) => {
-            assert.equal(
-                constants.PRODUCT_HREF_RE.test('/us/en/regular-fit-overshirt-p04302400.html?v1=469160573'),
-                true
-            );
-            assert.equal(
-                constants.PRODUCT_HREF_RE.test('/en_us/productpage.1234567001.html'),
-                true, 'H&M writes it this way'
-            );
-        });
-    });
-
-    test('a slug ending in a word starting with p is not a product URL', () => {
-        // The reason -p must be followed by digits, or by a second hyphen:
-        // otherwise "-pants" and "-polo" are product codes.
-        withZara(({ constants }) => {
-            assert.equal(constants.PRODUCT_HREF_RE.test('/shop/mens-pants-wide-leg'), false);
-            assert.equal(constants.PRODUCT_HREF_RE.test('/us/en/man-shirts-l737.html'), false);
+    test('a card with a picture, a price and a name is a product', () => {
+        // Zara's URLs are "-p04302400.html" and nothing in the detector knows or
+        // cares about that shape any more.
+        withZara(({ window, document }) => {
+            const img = document.querySelector('.product-grid__item img');
+            assert.equal(window.isValidProductCard(img), true);
         });
     });
 
@@ -238,16 +223,61 @@ describe('Zara-shaped listing pages', () => {
         // a width >= 150 check while being larger than that check meant to say.
         withZara(({ window, document }) => {
             const img = document.querySelector('.product-grid__item img');
+            const rect = img.getBoundingClientRect();
+            assert.ok(rect.width < 150, 'the fixture really is under the old floor');
             assert.equal(window.isValidProductCard(img), true);
         });
     });
 
-    test('the category tile still gets nothing', () => {
-        // Loosening the size rule must not loosen what counts as a product.
+    test('a tile with no price is not a product, whatever its URL', () => {
         withZara(({ window, document }) => {
             const tile = document.querySelectorAll('.product-grid__item')[2].querySelector('img');
             assert.equal(window.isValidProductCard(tile), false);
         });
+    });
+
+    test('prices are read in every currency, not just dollars', () => {
+        // This check was /\$\s?\d+/ - so every store selling in pounds, euros or
+        // yen failed the one test that decides whether something is a product.
+        withZara(({ constants }) => {
+            for (const money of ['$725.00', '£1,250.00', '€99,90', '¥1200', 'CHF 210', '1 250,00 €']) {
+                assert.equal(constants.PRICE_RE.test(money), true, `${money} is a price`);
+            }
+            for (const notMoney of ['4.1 (151K)', '10.5', 'Size 10', '2026', 'SALE']) {
+                assert.equal(constants.PRICE_RE.test(notMoney), false, `${notMoney} is not a price`);
+            }
+        });
+    });
+
+    test('a card does not borrow the price of the card beside it', () => {
+        // The boundary is not a size ratio, it is the point where a container
+        // starts holding a second thing you could buy.
+        withZara(({ window, document }) => {
+            const tile = document.querySelectorAll('.product-grid__item')[2];
+            const card = window.findProductCard(tile.querySelector('img'));
+            assert.equal(card, null, 'an unpriced tile has no card of its own');
+        });
+    });
+
+    test('the name carries the brand when the card prints one', () => {
+        // "Rick Owens Women's Low Sneaker" beats "Low Sneaker". Shops split brand
+        // and model across elements, and taking whichever came first in the DOM
+        // is how a $189 sneaker was saved with no brand attached at all.
+        const ctx = mountContent(`<html><body>
+            <div class="card" data-rect="0,0,200,320">
+                <a href="/p/low-sneaker-blue" data-rect="0,0,200,240">
+                    <img src="https://cdn.example.com/sneaker.jpg" alt="" data-rect="0,0,200,240" />
+                </a>
+                <div data-rect="0,250,200,18">Rick Owens</div>
+                <div data-rect="0,270,200,18">Women's Low Sneaker - Blue</div>
+                <div data-rect="0,290,200,18">$189</div>
+            </div></body></html>`, { url: 'https://www.lyst.com/shop/sneakers/' });
+        try {
+            const card = ctx.window.findProductCard(ctx.document.querySelector('img'));
+            const title = ctx.window.readCardTitle(card, ctx.document.querySelector('img'));
+            assert.match(title, /Rick Owens/, 'the brand must survive');
+            assert.match(title, /Low Sneaker/);
+        } finally { ctx.close(); }
     });
 });
 
