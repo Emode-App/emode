@@ -262,7 +262,8 @@ export function mountContent(html, options = {}) {
     mounted.window.eval(`${source}
         ;window.__emodeTest = {
             ORDER_CONFIRMED_RE, SHOPIFY_CONFIRMED_RE, GOOGLE_HOST_RE,
-            GOOGLE_PRICE_RE, PRODUCT_HREF_RE, EDITORIAL_HREF_RE,
+            GOOGLE_PRICE_RE, EDITORIAL_HREF_RE,
+            PRODUCT_HREF_RE: PRODUCT_HREF_RE_COMPILED,
             STORE_EMODE_SELECTORS,
         };`);
 

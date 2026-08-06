@@ -3,13 +3,10 @@
     "version": "0.0.0",
     "private": true,
     "scripts": {
-        "build": "vite build",
-        "dev": "vite",
         "lint": "eslint .",
         "test": "node --test \"test/*.test.mjs\""
     },
     "devDependencies": {
-        "vite": "latest",
         "@types/chrome": "latest",
         "jsdom": "^26.0.0"
     }

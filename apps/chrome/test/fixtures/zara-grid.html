@@ -1,0 +1,53 @@
+<!--
+  A Zara listing page.
+
+  Two things here defeated the detector at once, and both are the common case
+  rather than the exotic one:
+
+    * URLs are "-p04302400.html" - the style code runs straight on from -p with
+      no second hyphen, and a file extension follows it. The old pattern knew
+      Gucci's "-p-8202981ABAP9754" and required the digits to end the path.
+
+    * Grid images are about 145x190. Taller than they are wide, like most
+      garment photography, and so they failed a width >= 150 check while being
+      comfortably bigger than that check was trying to express.
+
+  The last tile is a category link with no price. It must stay pill-free.
+-->
+<html>
+<head><title>Zara Origins | ZARA United States</title></head>
+<body>
+  <main data-rect="0,0,1440,1600">
+    <ul class="product-grid" data-rect="165,150,1080,600">
+
+      <li class="product-grid__item" data-rect="165,150,155,250">
+        <a href="/us/en/regular-fit-overshirt-p04302400.html?v1=469160573" data-rect="165,150,155,195">
+          <img src="https://static.zara.net/photos/2026/V/0/1/p/4302/400/711/2/w/750/4302400711_1_1_1.jpg"
+               alt="REGULAR FIT OVERSHIRT" data-rect="165,150,145,190" />
+        </a>
+        <h3 data-rect="165,358,155,16">REGULAR FIT OVERSHIRT</h3>
+        <span class="price" data-rect="165,376,155,16">$ 119.00</span>
+      </li>
+
+      <li class="product-grid__item" data-rect="401,150,155,250">
+        <a href="/us/en/vintage-wash-effect-straight-fit-jeans-p05575400.html" data-rect="401,150,155,195">
+          <img src="https://static.zara.net/photos/2026/V/0/1/p/5575/400/250/2/w/750/5575400250_1_1_1.jpg"
+               alt="VINTAGE WASH EFFECT STRAIGHT FIT JEANS" data-rect="401,150,145,190" />
+        </a>
+        <h3 data-rect="401,358,155,16">VINTAGE WASH EFFECT STRAIGHT FIT...</h3>
+        <span class="price" data-rect="401,376,155,16">$ 99.90</span>
+      </li>
+
+      <!-- Category tile: no price, no product code. No pill. -->
+      <li class="product-grid__item" data-rect="637,150,155,250">
+        <a href="/us/en/man-shirts-l737.html" data-rect="637,150,155,195">
+          <img src="https://static.zara.net/photos/2026/V/categories/shirts-banner.jpg"
+               alt="SHIRTS" data-rect="637,150,145,190" />
+        </a>
+        <h3 data-rect="637,358,155,16">SHIRTS</h3>
+      </li>
+
+    </ul>
+  </main>
+</body>
+</html>

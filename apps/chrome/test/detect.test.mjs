@@ -13,7 +13,7 @@
 
 import { test, describe } from 'node:test';
 import assert from 'node:assert/strict';
-import { mount, mountFixture } from './harness.mjs';
+import { mount, mountFixture, mountContentFixture } from './harness.mjs';
 
 // The Shopify fixture is served from its own domain, which is where the
 // store-name strip gets its signal in the wild.
@@ -193,6 +193,61 @@ describe('listing pages', () => {
         assert.match(context.title, /silk shirt/i);
         assert.match(context.price, /1,150/);
         assert.match(context.image, /silk-shirt/);
+    });
+});
+
+describe('Zara-shaped listing pages', () => {
+    // Two independent reasons no pill ever appeared on zara.com, both of which
+    // are the common case rather than the exotic one.
+    //
+    // These mount content.js, which installs a polling interval, so every one
+    // closes its window - a leaked interval keeps the test runner alive forever.
+    const ZARA = 'https://www.zara.com/us/en/man-new-in-l711.html';
+    const withZara = (fn) => {
+        const ctx = mountContentFixture('zara-grid', { url: ZARA });
+        try { fn(ctx); } finally { ctx.close(); }
+    };
+
+    test('a style code running straight on from -p is a product URL', () => {
+        // Zara writes "-p04302400.html". The pattern knew Gucci's "-p-<code>"
+        // and required digits to END the path, so every Zara card was rejected
+        // as a non-product link.
+        withZara(({ constants }) => {
+            assert.equal(
+                constants.PRODUCT_HREF_RE.test('/us/en/regular-fit-overshirt-p04302400.html?v1=469160573'),
+                true
+            );
+            assert.equal(
+                constants.PRODUCT_HREF_RE.test('/en_us/productpage.1234567001.html'),
+                true, 'H&M writes it this way'
+            );
+        });
+    });
+
+    test('a slug ending in a word starting with p is not a product URL', () => {
+        // The reason -p must be followed by digits, or by a second hyphen:
+        // otherwise "-pants" and "-polo" are product codes.
+        withZara(({ constants }) => {
+            assert.equal(constants.PRODUCT_HREF_RE.test('/shop/mens-pants-wide-leg'), false);
+            assert.equal(constants.PRODUCT_HREF_RE.test('/us/en/man-shirts-l737.html'), false);
+        });
+    });
+
+    test('a portrait grid image is big enough', () => {
+        // 145x190: taller than wide, like most garment photography, and failing
+        // a width >= 150 check while being larger than that check meant to say.
+        withZara(({ window, document }) => {
+            const img = document.querySelector('.product-grid__item img');
+            assert.equal(window.isValidProductCard(img), true);
+        });
+    });
+
+    test('the category tile still gets nothing', () => {
+        // Loosening the size rule must not loosen what counts as a product.
+        withZara(({ window, document }) => {
+            const tile = document.querySelectorAll('.product-grid__item')[2].querySelector('img');
+            assert.equal(window.isValidProductCard(tile), false);
+        });
     });
 });
 

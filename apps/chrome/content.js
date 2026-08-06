@@ -216,14 +216,43 @@ function global_detect() {
 // path and hangs the style code off the end as "-p-8202981ABAP9754", matching
 // neither /product/ nor /p/.
 const PRODUCT_HREF_RE =
-    /\/(products?|pr|p|item|items|dp|sku|prod|listing)(\/|\?|$)|-p-[a-z0-9]{4,}|-(\d{5,})(\/|\?|$)/i;
+    // A path segment that names a product...
+    /\/(products?|pr|p|item|items|dp|sku|prod|listing|productpage)(\/|\?|$)/i.source +
+    // ...or Gucci's "-p-8202981ABAP9754". The second hyphen is load-bearing:
+    // without it "-p" followed by letters matches "-pants" and "-polo".
+    '|' + /-p-[a-z0-9]{4,}/i.source +
+    // ...or Zara's "-p04302400.html", where the code runs straight on from -p
+    // and is always digits.
+    '|' + /-p\d{4,}/i.source +
+    // ...or a bare numeric style code, which may be followed by a file
+    // extension rather than ending the path - H&M writes
+    // "productpage.1234567001.html". Requiring the digits to END the path is
+    // what made this miss every store that serves .html.
+    '|' + /[-.]\d{5,}(\.html?|\/|\?|$)/i.source;
+
+const PRODUCT_HREF_RE_COMPILED = new RegExp(PRODUCT_HREF_RE, 'i');
 const EDITORIAL_HREF_RE = /\/(stories|story|blog|article|news|guides?|lookbook|editorial|magazine|journal|about|help|careers)(\/|\?|$)/i;
 
 function isValidProductCard(img) {
     if (!img || img.tagName !== 'IMG') return false;
 
+    // Size floor by area and shape, not by both edges.
+    //
+    // Requiring width >= 150 AND height >= 150 assumed every product image is at
+    // least square. Zara's grid is roughly 145x190 - taller than it is wide, like
+    // most garment photography - so every card on the page failed a check about
+    // its width while being comfortably larger than the threshold was trying to
+    // express. A five-column grid on a laptop is not an unusual layout; it is the
+    // common one.
+    //
+    // Area still excludes the small furniture the floor existed for, and the
+    // minimum edge still excludes a wide thin banner, which area alone would let
+    // through.
     const rect = img.getBoundingClientRect();
-    if (rect.width < 150 || rect.height < 150) return false;
+    const MIN_AREA = 150 * 150;
+    const MIN_EDGE = 100;
+    if (rect.width * rect.height < MIN_AREA) return false;
+    if (Math.min(rect.width, rect.height) < MIN_EDGE) return false;
 
     // The image must itself be the clickable target of a product link.
     //
@@ -238,7 +267,7 @@ function isValidProductCard(img) {
 
     const href = anchor.getAttribute('href') || '';
     if (EDITORIAL_HREF_RE.test(href)) return false;
-    if (!PRODUCT_HREF_RE.test(href)) return false;
+    if (!PRODUCT_HREF_RE_COMPILED.test(href)) return false;
 
     // Find container
     const container = findProductContainer(img);
@@ -1184,9 +1213,12 @@ document.addEventListener('mouseover', (e) => {
     // grid images, so the floor that keeps pills off site furniture elsewhere
     // would exclude every real product on a results page.
     const onSearch = isGoogleSearch();
-    const minSize = onSearch ? 70 : 150;
+    // Cheap pre-filter only. The real decision is isValidProductCard, which
+    // judges by area and shape - keep this from re-imposing the square
+    // assumption that made every Zara card fail on its width.
+    const minEdge = onSearch ? 60 : 90;
 
-    if (target.tagName === 'IMG' && target.offsetWidth > minSize && target.offsetHeight > minSize) {
+    if (target.tagName === 'IMG' && target.offsetWidth > minEdge && target.offsetHeight > minEdge) {
         // On a results page the generic validator cannot apply - every href is a
         // Google redirect - so the adapter decides, and it is stricter: a card
         // without a price or a resolvable destination gets no pill.
