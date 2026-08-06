@@ -88,6 +88,14 @@ Submission work, not bugs.
   with one of everything looks like. AppSumo delivers a thousand of everything on
   day one, and more of these almost certainly exist.
 
+- **Dunning is handled, but has never been exercised.** A failed payment now
+  marks the merchant `past_due`, keeps their service running while Stripe
+  retries, shows them a banner offering the billing portal, and revokes only on
+  Stripe's final attempt. None of it has been triggered against a real card,
+  because doing so requires a real failed charge. Stripe's test clocks can drive
+  the whole sequence in the dashboard — worth doing once before AppSumo, since
+  this path only runs when someone's money is already in question.
+
 - **Model shots are unverified against a real product.** The Studio pipeline is
   built and typechecks, but no shot has been generated from a live catalogue —
   the only captured products point at `localhost` images the server cannot fetch.
