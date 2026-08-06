@@ -142,7 +142,6 @@ describe('the source itself', () => {
             const lines = source.split('\n');
 
             for (let i = 0; i < lines.length; i++) {
-                // eslint-disable-next-line no-control-regex
                 const match = /[\u0000-\u0008\u000b\u000c\u000e-\u001f]/.exec(lines[i]);
                 assert.equal(
                     match, null,

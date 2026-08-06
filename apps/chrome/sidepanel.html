@@ -309,9 +309,9 @@
       Active Product
     </div>
     <div class="active-product-card glass-card" style="padding: 12px; border-radius: 16px;">
-      <img id="active-product-img"
-        src="https://images.unsplash.com/photo-1591047139829-d91aecb6caea?q=80&w=400&h=600&auto=format&fit=crop"
-        class="product-img" />
+      <!-- Starts on the placeholder rather than a stock photo of a blazer that
+           is not the shopper's product. -->
+      <img id="active-product-img" alt="" class="product-img" src="" />
       <div class="product-info">
         <h4 id="active-product-title">Midnight Blazer</h4>
         <p id="active-product-price">Waiting for detection...</p>
@@ -329,9 +329,30 @@
     </button>
   </div>
 
+  <!-- Reporting a shop where detection failed. There are millions of shops and
+       no rule covers all of them; the difference between a slow leak and a
+       fixable backlog is whether the failures are ever written down. -->
+  <div id="report-row" style="margin-top: 10px; text-align: center;">
+    <button id="btn-report" type="button"
+      style="background: none; border: none; color: rgba(0,0,0,0.4); font-size: 0.72rem;
+             font-weight: 600; cursor: pointer; text-decoration: underline; padding: 6px;">
+      No buttons on this page?
+    </button>
+    <p id="report-status" style="display: none; font-size: 0.72rem; color: #047857;
+       font-weight: 600; margin-top: 4px;"></p>
+  </div>
+
   <div class="section-header" style="margin-top: 40px;">
     <h2 class="section-title">Dressing Room</h2>
-    <span id="cart-total" style="font-weight: 800; font-size: 0.9rem;">$0.00</span>
+    <div style="display: flex; align-items: center; gap: 10px;">
+      <span id="cart-total" style="font-weight: 800; font-size: 0.9rem;">$0.00</span>
+      <button id="btn-clear-cart" type="button" title="Remove everything from your dressing room"
+        style="display: none; background: none; border: none; color: rgba(0,0,0,0.35);
+               font-size: 0.7rem; font-weight: 700; cursor: pointer; text-transform: uppercase;
+               letter-spacing: 0.05em; padding: 2px 4px;">
+        Clear
+      </button>
+    </div>
   </div>
 
   <div id="cart-list" style="display: flex; flex-direction: column; gap: 8px;">

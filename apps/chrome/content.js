@@ -35,7 +35,62 @@ function isEmodeApp() {
  * had been sent since and it sat on "Detecting..." indefinitely. It needed to be
  * able to ask.
  */
+let lastScanError = null;
+
+/**
+ * What the detector saw here, in the shopper's words and ours.
+ *
+ * Answering "why are there no buttons on this page" needs the page, and the page
+ * is on someone else's machine. Asking a shopper to open devtools is not a
+ * support flow. So the panel can ask, and this answers with the specific reason
+ * detection stopped - which tier fired, whether a buy control was found, whether
+ * a scan threw - rather than with the fact that it did.
+ */
+function collectDiagnostics() {
+    const api = global_detect();
+    const detected = (() => {
+        try { return api ? api.detectProduct() : null; } catch { return null; }
+    })();
+
+    const cart = (() => {
+        try { return api ? api.findCartButton() : null; } catch { return null; }
+    })();
+
+    return {
+        host: window.location.host,
+        // Path only. A query string on a product page routinely carries a
+        // click id, a session token or an email address, and none of that is
+        // needed to work out why a button is missing.
+        path: window.location.pathname.slice(0, 200),
+        detected: detected ? { source: detected.source, hasPrice: !!detected.price } : null,
+        signals: {
+            jsonLd: document.querySelectorAll('script[type="application/ld+json"]').length,
+            ogTitle: !!document.querySelector('meta[property="og:title"]'),
+            ogImage: !!document.querySelector('meta[property="og:image"]'),
+            ogType: document.querySelector('meta[property="og:type"]')?.content || null,
+            cartButton: cart ? (cart.innerText || cart.value || '').trim().slice(0, 40) : null,
+            sizeControl: (() => { try { return api ? api.hasSizeControl() : false; } catch { return false; } })(),
+            buttonsPresent: !!document.querySelector('.emode-extension-injected'),
+            storeHasEmode: storeHasEmode(),
+            largeImages: Array.from(document.querySelectorAll('img')).filter((img) => {
+                const r = img.getBoundingClientRect();
+                return r.width > 150 && r.height > 150;
+            }).length,
+        },
+        lastScanError,
+        extensionVersion: chrome.runtime?.getManifest?.().version || null,
+    };
+}
+
 chrome.runtime?.onMessage?.addListener((message, sender, sendResponse) => {
+    if (message?.type === 'REQUEST_DIAGNOSTICS') {
+        try {
+            sendResponse({ diagnostics: collectDiagnostics() });
+        } catch (err) {
+            sendResponse({ diagnostics: { error: String(err?.message || err) } });
+        }
+        return true;
+    }
     if (message?.type !== 'REQUEST_PRODUCT') return;
     try {
         sendResponse({ product: isPDP() ? extractProductContext() : null });
@@ -1053,6 +1108,15 @@ function injectButtons() {
 
     lastScannedUrl = window.location.href;
 
+    // Read once, here, before anything below can want it.
+    //
+    // This was declared further down, after the re-anchor branch that uses it.
+    // `const` is in the temporal dead zone until its own line executes, so that
+    // branch threw ReferenceError - and it is reached on every scan after the
+    // buttons first appear, so from that moment every scan on the page died in
+    // the catch and nothing ever updated again.
+    const detectApi = global_detect();
+
     const alreadyThere = document.querySelector('.emode-extension-injected');
     if (alreadyThere) {
         // Re-anchor if a real buy control has since appeared.
@@ -1076,7 +1140,6 @@ function injectButtons() {
     // contained "ADD TO"/"BAG"/"BUY". So on Gucci the detector was certain and
     // the placer found nothing, and no buttons appeared on a page we had fully
     // identified. One source of truth, one answer.
-    const detectApi = global_detect();
     const anchor = detectApi ? detectApi.findAnchor() : null;
     if (!anchor) return;
 
@@ -1238,6 +1301,11 @@ function scheduleScan() {
             // One thrown scan used to be fatal for every site: extractProductContext
             // referenced a variable that no longer existed, injectButtons threw
             // before inserting anything, and the buttons vanished everywhere.
+            //
+            // Kept, not just logged. A shopper reporting "no buttons here" cannot
+            // be asked to open devtools, and without the error the report is a
+            // shrug. This is the difference between a bug report and a lead.
+            lastScanError = `${err?.name || 'Error'}: ${err?.message || err}`;
             console.warn('[emodeAI] scan failed:', err);
         }
     }, 100);

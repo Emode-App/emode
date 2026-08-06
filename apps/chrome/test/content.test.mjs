@@ -237,6 +237,30 @@ describe('actually drawing the buttons', () => {
         } finally { ctx.close(); }
     });
 
+    test('scanning twice does not throw', () => {
+        // The second scan is the one that breaks. The first inserts buttons; from
+        // then on every scan takes the "already there, should I re-anchor?"
+        // branch - which read a `const` declared fourteen lines below it and
+        // threw ReferenceError out of the temporal dead zone.
+        //
+        // Every scan on the page died in the catch from that moment, so nothing
+        // updated again: no re-anchoring when the buy button finally rendered, no
+        // buttons after an SPA route change, and no pills on a results page.
+        // A single scan looked perfect, which is exactly why it survived.
+        const ctx = mountContentFixture('shopify-pdp', {
+            url: 'https://lukes.store/products/dior-b31-teal-hiking-sneakers',
+        });
+        try {
+            ctx.window.injectButtons();
+            assert.doesNotThrow(() => ctx.window.injectButtons(), 'the second scan must survive');
+            assert.doesNotThrow(() => ctx.window.injectButtons(), 'and the third');
+            assert.equal(
+                ctx.document.querySelectorAll('.emode-extension-injected').length, 1,
+                'rescanning must not duplicate the buttons either'
+            );
+        } finally { ctx.close(); }
+    });
+
     test('a store with emode already installed gets none', () => {
         // Two sets of try-on buttons on one product looks broken, and it is the
         // paying merchant's install that looks broken.

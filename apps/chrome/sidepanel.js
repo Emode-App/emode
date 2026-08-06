@@ -66,11 +66,26 @@ async function refreshActiveProduct() {
     }
 }
 
+// A drawn placeholder, not an empty src.
+//
+// removeAttribute('src') leaves the browser's broken-image icon sitting in
+// the card - a torn page glyph, which reads as 'this is broken' rather than
+// 'there is nothing here yet'. Inline SVG so it needs no network and no file.
+const EMPTY_PRODUCT_IMAGE =
+    'data:image/svg+xml;utf8,' + encodeURIComponent(
+        '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 48 64" fill="none">' +
+        '<rect width="48" height="64" rx="6" fill="%23f2f2f0"/>' +
+        '<path d="M18 20h12l3 5v17a2 2 0 0 1-2 2H17a2 2 0 0 1-2-2V25l3-5z" ' +
+        'stroke="%23c9c7c2" stroke-width="2" stroke-linejoin="round"/>' +
+        '<path d="M20 20a4 4 0 0 0 8 0" stroke="%23c9c7c2" stroke-width="2"/>' +
+        '</svg>'
+    );
+
 function showNoProduct() {
     activeProduct = { title: 'No product on this page', image: '', price: '' };
     if (productTitle) productTitle.textContent = activeProduct.title;
     if (productPrice) productPrice.textContent = 'Open a product page to try something on';
-    if (productImg) productImg.removeAttribute('src');
+    if (productImg) productImg.src = EMPTY_PRODUCT_IMAGE;
     if (tryOnBtn) tryOnBtn.disabled = true;
 }
 
@@ -257,6 +272,15 @@ function parseCartPrice(text) {
     return isNaN(val) ? 0 : val;
 }
 
+// A product image that fails to load leaves the same torn-page glyph, and
+// merchant CDNs hotlink-block often enough that this is not rare.
+if (productImg) {
+    productImg.src = EMPTY_PRODUCT_IMAGE;
+    productImg.addEventListener('error', () => {
+        if (productImg.src !== EMPTY_PRODUCT_IMAGE) productImg.src = EMPTY_PRODUCT_IMAGE;
+    });
+}
+
 async function loadCart() {
     const { emode_cart } = await chrome.storage.local.get({ emode_cart: [] });
     renderCart(emode_cart || []);
@@ -282,6 +306,11 @@ function renderCart(items) {
         .filter((item) => !item.purchasedAt)
         .reduce((sum, item) => sum + parseCartPrice(item.price), 0);
     cartTotal.textContent = `$${total.toFixed(2)}`;
+
+    // Nothing to clear when there is nothing there, and a disabled-looking
+    // control beside an empty list is just noise.
+    const clearBtn = document.getElementById('btn-clear-cart');
+    if (clearBtn) clearBtn.style.display = items.length ? 'inline-block' : 'none';
 
     if (items.length === 0) {
         cartList.innerHTML = `<div class="empty-state" style="grid-column: span 2;">Nothing saved yet.<br />Add items while browsing and they collect here, from any shop.</div>`;
@@ -434,4 +463,107 @@ if (!document.getElementById('emode-sidepanel-styles')) {
         }
     `;
     document.head.appendChild(style);
+}
+
+/* ------------------------------------------------------------------ *
+ * Emptying the dressing room                                          *
+ * ------------------------------------------------------------------ */
+
+// Saved items had no way out except one at a time. A shopper who has been
+// collecting for a week faces a column of little crosses, which is the kind of
+// small indignity that makes people give up on a feature rather than complain
+// about it.
+//
+// Confirmed, because it is not undoable and the items came from shops the
+// shopper may not be able to find again.
+const clearCartBtn = document.getElementById('btn-clear-cart');
+if (clearCartBtn) {
+    clearCartBtn.onclick = async () => {
+        const { emode_cart } = await chrome.storage.local.get({ emode_cart: [] });
+        const count = (emode_cart || []).length;
+        if (!count) return;
+
+        const noun = count === 1 ? 'item' : 'items';
+        if (!confirm(`Remove all ${count} ${noun} from your dressing room?`)) return;
+
+        await chrome.storage.local.set({ emode_cart: [] });
+        renderCart([]);
+    };
+}
+
+/* ------------------------------------------------------------------ *
+ * "No buttons on this page?"                                          *
+ * ------------------------------------------------------------------ */
+
+/**
+ * Detection will always be wrong on some shops. There are millions of them and
+ * no rule covers every one — what decides whether that is a slow leak or a
+ * fixable backlog is whether the failures are ever written down.
+ *
+ * Sends host and PATH only, never the full URL: a product URL routinely carries
+ * a click id, a session token or an email address in its query string, and none
+ * of that helps explain a missing button. Along with it goes what the detector
+ * actually saw — which tier fired, whether a buy control was found, whether a
+ * scan threw — because a report without that says only that something is wrong.
+ */
+const reportBtn = document.getElementById('btn-report');
+const reportStatus = document.getElementById('report-status');
+
+if (reportBtn) {
+    reportBtn.onclick = async () => {
+        reportBtn.disabled = true;
+        const previous = reportBtn.textContent;
+        reportBtn.textContent = 'Sending…';
+
+        const say = (message, ok = true) => {
+            if (!reportStatus) return;
+            reportStatus.textContent = message;
+            reportStatus.style.color = ok ? '#047857' : '#b91c1c';
+            reportStatus.style.display = 'block';
+        };
+
+        try {
+            const [tab] = await chrome.tabs.query({ active: true, currentWindow: true });
+            let diagnostics = null;
+            try {
+                const answer = await chrome.tabs.sendMessage(tab.id, { type: 'REQUEST_DIAGNOSTICS' });
+                diagnostics = answer?.diagnostics || null;
+            } catch {
+                // No content script here — a chrome:// page, the web store, or a
+                // tab that predates the install. Still worth reporting: "the
+                // extension is not running here" is itself the answer.
+                diagnostics = { contentScript: false };
+            }
+
+            let host = diagnostics?.host || '';
+            let path = diagnostics?.path || '';
+            if (!host && tab?.url) {
+                try {
+                    const url = new URL(tab.url);
+                    host = url.host;
+                    path = url.pathname;
+                } catch { /* not a reportable URL */ }
+            }
+
+            if (!host) {
+                say('There is no shop on this tab to report.', false);
+                return;
+            }
+
+            const res = await fetch(`${BASE_URL}/api/report`, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ host, path, diagnostics }),
+            });
+            if (!res.ok) throw new Error('Report failed');
+
+            say(`Thanks — we'll take a look at ${host}.`);
+            reportBtn.style.display = 'none';
+        } catch {
+            say('Could not send that just now. Try again in a moment.', false);
+        } finally {
+            reportBtn.disabled = false;
+            reportBtn.textContent = previous;
+        }
+    };
 }
