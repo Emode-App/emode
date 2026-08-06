@@ -281,6 +281,48 @@ describe('what makes something a product', () => {
     });
 });
 
+describe('a product page that is not currently buyable', () => {
+    // Verified against stockx.com on 2026-08-06: two colourways of one jacket,
+    // neither with a JSON-LD Product, neither with og:type. One had rendered
+    // "Buy Now" and got buttons; the other had no asks, said "Make Offer", and
+    // got nothing. The entire decision rested on one literal string.
+    const URL = 'https://stockx.com/kith-x-knicks-satin-bomber-jacket-sandrift';
+
+    test('is still a product page', () => {
+        const { detect } = mountFixture('no-asks-pdp', { url: URL });
+        assert.equal(detect.isProductPage(), true, 'out of stock is a stock state');
+    });
+
+    test('recognised by its size control, not by a buy word', () => {
+        // The one thing an article never has. Found by shape - a control whose
+        // label starts with "Size" - rather than by searching page text for the
+        // word, which matches a shipping FAQ on any page of any site.
+        const { detect } = mountFixture('no-asks-pdp', { url: URL });
+        assert.equal(detect.hasSizeControl(), true);
+        assert.equal(detect.sellsOneThing(), true);
+    });
+
+    test('"Make Offer" counts as a buy control', () => {
+        // Along with sold out, pre-order and notify me: only a page selling one
+        // item ever says any of them.
+        const { detect } = mountFixture('no-asks-pdp', { url: URL });
+        const cart = detect.findCartButton();
+        assert.ok(cart, 'a way to transact is a buy control even when it is a bid');
+        assert.match(cart.innerText, /Make Offer/i);
+    });
+
+    test('a listing page is still not one product', () => {
+        // The false positive this nearly created. A real StockX category page
+        // has forty cards, so it shows prices and carries og:title and og:image
+        // - which is exactly why a visible price was rejected as evidence.
+        const { detect } = mountFixture('listing-grid', {
+            url: 'https://stockx.com/apparel/jackets-and-coats',
+        });
+        assert.equal(detect.hasSizeControl(), false);
+        assert.equal(detect.sellsOneThing(), false);
+    });
+});
+
 describe('image ranking', () => {
     test('prefers the largest on-screen image', () => {
         const { detect, document } = mountFixture('shopify-pdp', { url: SHOPIFY_URL });

@@ -122,3 +122,35 @@ describe('which saved items an order covered', () => {
         assert.equal(covers('not a url', 'gucci.com'), false);
     });
 });
+
+describe('the source itself', () => {
+    // A whole class of silent breakage, caught cheaply.
+    //
+    // Writing JavaScript through a shell heredoc interprets backslash escapes
+    // before the file is written, so every `\b` in a regex literal became a
+    // literal backspace byte (0x08). The regex then matches "size" followed by a
+    // backspace, which no page contains - so the check never fires, the file
+    // still parses, lint still passes, and nothing anywhere says a word.
+    //
+    // Eight of these were live at once, including one that had quietly disabled
+    // the section-heading filter for some time.
+    test('no stray control characters in any shipped file', () => {
+        const files = ['detect.js', 'content.js', 'background.js', 'sidepanel.js', 'auth-bridge.js'];
+
+        for (const name of files) {
+            const source = readFileSync(join(EXT, name), 'utf8');
+            const lines = source.split('\n');
+
+            for (let i = 0; i < lines.length; i++) {
+                // eslint-disable-next-line no-control-regex
+                const match = /[\u0000-\u0008\u000b\u000c\u000e-\u001f]/.exec(lines[i]);
+                assert.equal(
+                    match, null,
+                    `${name}:${i + 1} contains a raw control character ` +
+                    `(0x${match?.[0].charCodeAt(0).toString(16)}) - ` +
+                    `almost certainly a regex escape mangled on write:\n  ${lines[i].trim()}`
+                );
+            }
+        }
+    });
+});

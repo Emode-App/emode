@@ -191,7 +191,7 @@
         const currency = meta('product:price:currency') || meta('og:price:currency');
 
         const isProductType = String(meta('og:type') || '').toLowerCase().includes('product');
-        if (!isProductType && !amount && !findCartButton()) return null;
+        if (!isProductType && !amount && !sellsOneThing()) return null;
 
         return {
             title: cleanProductTitle(title),
@@ -207,7 +207,87 @@
     // luxury sites in particular gate the cart behind size selection, so the
     // visible control says "Select size" until a size is chosen.
     const CART_BUTTON_RE =
-        /add to (cart|bag|basket)|add-to-cart|addtocart|buy now|purchase|select size|choose size|pick a size|add to my|shop now/i;
+        /add to (cart|bag|basket)|add-to-cart|addtocart|buy now|purchase|select size|choose size|pick a size|add to my|shop now|make (an )?offer|place (a )?bid|pre-?order|notify me|sold out|out of stock|email me when/i;
+
+    /**
+     * Does this page sell one thing?
+     *
+     * The OpenGraph tier needs evidence that a page with a title and a picture is
+     * a shop's product page and not an article about a jacket. That evidence used
+     * to be a cart button and nothing else, which made the whole decision rest on
+     * one literal string.
+     *
+     * Observed on StockX: two colourways of the same jacket, identical markup, no
+     * JSON-LD Product on either and no og:type on either. One said "Buy Now" and
+     * got try-on buttons; the other had no asks so it said "Make Offer" and got
+     * nothing at all. Being temporarily unsold is a stock state, not a statement
+     * that the page stopped being a product.
+     *
+     * Three independent signals now, all of them structural rather than
+     * per-store:
+     *
+     *   - a buy control, in a vocabulary wide enough to include the ways a page
+     *     says you cannot buy it right now (sold out, make offer, notify me),
+     *     since only a product page ever says those things;
+     *   - a size control, which is the strongest signal there is for clothing
+     *     specifically and the one thing an article never has.
+     *
+     * A price on the page is deliberately NOT one of them, though it was the
+     * obvious third candidate. Checked against a real StockX category page: it
+     * has forty product cards, so of course it shows prices, and og:title and
+     * og:image besides. Accepting a visible price would have turned every
+     * listing page on the site into "one product" and injected buttons for the
+     * shop's own banner image. A price proves something is for sale; it says
+     * nothing about how many things.
+     */
+    function sellsOneThing() {
+        return !!findCartButton() || hasSizeControl();
+    }
+
+    const SIZE_LABEL_RE = /^\s*(select\s+(a\s+)?size|size\b|choose\s+(a\s+)?size|uk\s|us\s|eu\s)/i;
+    const SIZE_VALUE_RE = /^(xxs|xs|s|m|l|xl|xxl|xxxl|[0-9]{1,2}(\.5)?|one size|os)$/i;
+
+    /**
+     * A size picker, found by shape rather than by wording.
+     *
+     * Structural on purpose: searching the page text for "size" matches a
+     * shipping FAQ and a size-guide link on any page of the site. A control whose
+     * options are S/M/L, or whose label starts with "Size", is on a page selling
+     * a garment.
+     */
+    function hasSizeControl() {
+        for (const select of document.querySelectorAll('select')) {
+            const label = `${select.name} ${select.id} ${select.getAttribute('aria-label') || ''}`;
+            if (/size/i.test(label)) return true;
+            const options = Array.from(select.options || []).slice(1, 8).map((o) => o.text.trim());
+            if (options.length >= 2 && options.every((t) => SIZE_VALUE_RE.test(t))) return true;
+        }
+
+        for (const group of document.querySelectorAll('[role="radiogroup"], [role="listbox"], fieldset')) {
+            const label = group.getAttribute('aria-label') || group.querySelector('legend')?.textContent || '';
+            if (SIZE_LABEL_RE.test(label.trim())) return true;
+        }
+
+        // A control that simply says "Size:" or "Select a size" — StockX, and
+        // every luxury site that gates the cart behind choosing one.
+        for (const el of document.querySelectorAll('button, label, [role="button"], summary')) {
+            const text = (el.innerText || '').trim();
+            if (text && text.length < 40 && SIZE_LABEL_RE.test(text)) return true;
+        }
+        return false;
+    }
+
+    // A price printed on the page, as opposed to declared in a meta tag. Not used
+    // to decide whether a page is a product (see sellsOneThing), but a useful
+    // question to be able to ask. Any currency: this check was dollars-only
+    // elsewhere, and most of the web is not priced in dollars.
+    const VISIBLE_PRICE_RE =
+        /(?:[$£€¥₩₹]|\b(?:USD|EUR|GBP|CAD|AUD|JPY|CHF|SEK)\b)\s?\d[\d.,]*/;
+
+    function hasVisiblePrice() {
+        const main = document.querySelector('main') || document.body;
+        return VISIBLE_PRICE_RE.test((main.innerText || '').slice(0, 6000));
+    }
 
     /**
      * Is this element pinned to the viewport rather than sitting in the page?
@@ -414,7 +494,7 @@
      */
     // Headings that label a section rather than name a product.
     const SECTION_LABEL_RE =
-        /^(size|fit|size ?& ?fit|description|details|delivery|shipping|returns?|reviews?|care|composition|about|more|similar|you may also like|related)/i;
+        /^(size|fit|size ?& ?fit|description|details|delivery|shipping|returns?|reviews?|care|composition|about|more|similar|you may also like|related)\b/i;
 
     function fromScope(scope) {
         // Anchor on the price. Everything a shopper needs to identify what they
@@ -614,6 +694,9 @@
     global.emodeDetect = {
         linksElsewhere,
         primaryHref,
+        sellsOneThing,
+        hasSizeControl,
+        hasVisiblePrice,
         findOverlay,
         fromScope,
         onScreenArea,

@@ -1,0 +1,49 @@
+<!--
+  A product page for something that is not currently buyable.
+
+  Taken from what stockx.com actually served on 2026-08-06 for two colourways of
+  one jacket. Neither had a JSON-LD Product; neither had og:type. The difference
+  between them was a single string: one had rendered "Buy Now", the other had no
+  asks so it said "Make Offer". Buttons appeared on the first and not the second.
+
+  Worse, "Buy Now" only appears once the asks data loads, so even the working
+  colourway was winning a race rather than being detected.
+
+  A page being temporarily unsold is a stock state, not a statement that it
+  stopped being a product. What both pages DO have is a size control, which is
+  the thing an article never has.
+-->
+<html>
+<head>
+  <title>Kith x New York Knicks 2026 Champions Satin Bomber Jacket Sandrift</title>
+  <meta property="og:title" content="Kith x New York Knicks 2026 Champions Satin Bomber Jacket Sandrift" />
+  <meta property="og:image" content="https://images.stockx.com/images/Kith-x-New-York-Knicks-Satin-Bomber-Sandrift.jpg" />
+  <!-- No og:type, and no Product in the structured data. Only a breadcrumb. -->
+  <script type="application/ld+json">
+  {"@context":"https://schema.org","@type":"BreadcrumbList","itemListElement":[]}
+  </script>
+</head>
+<body>
+  <main data-rect="0,0,1440,1200">
+    <img src="https://images.stockx.com/images/Kith-x-New-York-Knicks-Satin-Bomber-Sandrift.jpg"
+         alt="Kith x New York Knicks Satin Bomber Jacket" data-rect="120,120,660,700" />
+
+    <div class="product-info" data-rect="820,120,540,600">
+      <h1 data-rect="820,120,540,60">Kith x New York Knicks 2026 Champions Satin Bomber Jacket</h1>
+      <p data-rect="820,190,540,24">Sandrift</p>
+
+      <button class="size-chooser" data-rect="820,240,540,48">Size: All</button>
+
+      <div class="ask-state" data-rect="820,320,540,160">
+        <p data-rect="820,320,540,40">
+          There are no Asks at this time but you can still place a Bid
+        </p>
+        <button data-rect="820,380,440,52">Make Offer</button>
+      </div>
+
+      <p data-rect="820,520,540,20">Last Sale --</p>
+      <a href="/sell" data-rect="820,560,540,20">Sell Now for $302 or Ask for More</a>
+    </div>
+  </main>
+</body>
+</html>

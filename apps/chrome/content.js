@@ -436,7 +436,7 @@ function parsePrice(text) {
     // Any currency, not just dollars. This matched $ alone, so a European
     // store's price sorted as Infinity and the cheapest-variant logic picked
     // arbitrarily.
-    const match = text.match(/(?:[$£€¥₩₹]|USD|EUR|GBP|CHF)\s?([\d,.]+)/);
+    const match = text.match(/(?:[$£€¥₩₹]|\bUSD|\bEUR|\bGBP|\bCHF)\s?([\d,.]+)/);
     if (!match) return Infinity;
 
     let raw = match[1];
