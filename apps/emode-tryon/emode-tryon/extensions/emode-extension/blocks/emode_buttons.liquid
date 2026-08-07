@@ -126,7 +126,22 @@
 <script>
 (function() {
   // ── Config ──
-  var EMODE_HOST = '{{ block.settings.emode_host | default: "https://www.emode.style" }}';
+  var EMODE_HOST = (function () {
+    var raw = '{{ block.settings.emode_host | default: "https://www.emode.style" }}';
+    // The apex 308-redirects to www, and a browser treats a redirect on a CORS
+    // preflight as fatal — so a merchant who saved "https://emode.style" got
+    // working try-on buttons and silently dead impression and order beacons.
+    // Nobody can debug that from the theme editor, so repair it here instead of
+    // asking them to know. Any other host is left exactly as typed, because a
+    // self-hosted or staging deployment is a legitimate thing to point at.
+    try {
+      var u = new URL(raw);
+      if (u.hostname === 'emode.style') u.hostname = 'www.emode.style';
+      return u.origin;
+    } catch (e) {
+      return raw.replace(/\/+$/, '');
+    }
+  })();
   var SHOP_DOMAIN = '{{ shop.permanent_domain }}';
   var PRODUCT_ID = '{{ product.id }}';
 
@@ -420,12 +435,26 @@
     }
     // Handle add-to-cart from iframe
     if (e.data && e.data.type === 'emode:add-to-cart') {
-      var variantId = e.data.variantId;
-      if (variantId && window.Shopify && window.Shopify.shop) {
+      // The modal now sends `items` for a whole look. `variantId` is still read
+      // as a fallback so a storefront running an older published version of this
+      // block keeps working after the modal updates — they deploy separately.
+      var list = Array.isArray(e.data.items) && e.data.items.length
+        ? e.data.items
+        : (e.data.variantId ? [{ variantId: e.data.variantId }] : []);
+
+      var cartItems = list
+        .map(function (it) { return parseInt(it && it.variantId, 10); })
+        .filter(function (id) { return !isNaN(id); })
+        // /cart/add.js rejects the whole request if any line is a duplicate, so
+        // one garment selected twice would lose the entire look.
+        .filter(function (id, i, all) { return all.indexOf(id) === i; })
+        .map(function (id) { return { id: id, quantity: 1 }; });
+
+      if (cartItems.length && window.Shopify && window.Shopify.shop) {
         fetch('/cart/add.js', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ items: [{ id: parseInt(variantId), quantity: 1 }] })
+          body: JSON.stringify({ items: cartItems })
         }).then(function() {
           closeEmodeModal();
           // Refresh cart drawer if available

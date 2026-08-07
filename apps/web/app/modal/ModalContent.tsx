@@ -14,6 +14,15 @@ interface DressingItem {
     price: string;
     /** The product page it came from — how the server identifies it later. */
     url?: string;
+    /**
+     * The Shopify variant, when the item was added from a Shopify product page.
+     *
+     * Without it "Purchase Look" cannot buy anything but the page you happen to
+     * be standing on: the cart is addressed by variant, and items had no way to
+     * carry one. Absent for anything added from a non-Shopify site, which is
+     * why the buy path skips rather than fails on items that lack it.
+     */
+    variantId?: string;
 }
 
 /* ------------------------------------------------------------------ *
@@ -462,7 +471,12 @@ export function ModalContent({ initialProduct, onClose }: ModalContentProps) {
             // image string depending on whether it came through as a URL or as a
             // handed-over data URL, and re-adding it would duplicate the card.
             if (prev.some(item => item.title === product.title || item.image === product.image)) return prev;
-            return [...prev, { ...product, url: searchParams.get('url') || undefined, id: crypto.randomUUID() }];
+            return [...prev, {
+                ...product,
+                url: searchParams.get('url') || undefined,
+                variantId: variantId || undefined,
+                id: crypto.randomUUID(),
+            }];
         });
         setActiveTab('dressing-room');
 
@@ -492,16 +506,66 @@ export function ModalContent({ initialProduct, onClose }: ModalContentProps) {
         }
     };
 
+    /**
+     * Honour what the storefront button says it does.
+     *
+     * The theme block's second button is id="emode-add-to-dressing-room" and
+     * reads "Dressing Room", but all it did was open this modal on that tab —
+     * the item was never added. A shopper had to switch to Try This On and use
+     * the add button there, having already pressed a button that promised it.
+     */
+    // Distinct from `autoAdded` above, which guards the Chrome-extension handoff.
+    const dressingRoomAutoAdd = useRef(false);
+    useEffect(() => {
+        if (dressingRoomAutoAdd.current) return;
+        if (defaultTab !== 'dressing-room') return;
+        if (!product?.title) return;
+        dressingRoomAutoAdd.current = true;
+        handleAddToDressingRoom();
+        // Mount only: this is the intent carried in by the URL, not a reaction
+        // to later state.
+        // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, []);
+
     const handleAddToCart = () => {
         const inIframe = window.parent !== window;
         if (inIframe) {
+            /**
+             * Buy the whole look, not one piece of it.
+             *
+             * This posted a single variantId — the product whose page the modal
+             * was opened from — so "Purchase Look" on a two-item outfit added
+             * one item and silently dropped the other. Stacking pieces is the
+             * entire point of the dressing room, and the buy button could not
+             * express it.
+             *
+             * Items added from a non-Shopify page have no variant and are
+             * skipped rather than failing the whole cart: better to add what can
+             * be added than to reject a look for one foreign garment.
+             */
+            const chosen = selectedItems.length ? selectedItems : [];
+            const variantIds = chosen
+                .map((i) => i.variantId)
+                .filter((v): v is string => Boolean(v));
+
+            // Nothing selected (plain "Add to Cart" on the try-on tab), or a
+            // selection that carried no variants at all: fall back to this page.
+            const items = variantIds.length
+                ? variantIds.map((id) => ({ variantId: id }))
+                : variantId
+                ? [{ variantId }]
+                : [];
+
             // The embedding host completes the purchase: the Shopify theme extension
             // posts to /cart/add.js, the widget re-dispatches as an emode:cart-add
             // CustomEvent for the host site. Target '*' — the parent is the
             // retailer's origin, unknowable here, and the payload has no secrets.
             window.parent.postMessage({
                 type: 'emode:add-to-cart',
-                variantId,
+                // `items` is the new shape. variantId stays for older installs
+                // of the theme block, which only read that.
+                items,
+                variantId: items[0]?.variantId || variantId,
                 title: product.title,
                 image: product.image,
                 price: product.price,
