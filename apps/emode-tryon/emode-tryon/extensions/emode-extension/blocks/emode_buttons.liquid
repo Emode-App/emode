@@ -484,93 +484,52 @@
        * fallback — they pressed a button called Purchase Look.
        */
       /**
-       * Add, then show the drawer — without leaving the product page.
+       * Add, then make the drawer show it — without leaving the product page.
        *
-       * Three attempts, best first, because no single one works on every theme.
+       * Worked out against the live storefront rather than from the docs,
+       * because the documented path does not do what it says here.
        *
-       * 1. Shopify.actions.updateCart. The sanctioned way for an app to change
-       *    a cart: the theme refreshes its own UI and the standard events fire
-       *    for us. This was tried before and appeared to do nothing, because it
-       *    takes a Storefront API merchandiseId — a gid://shopify/ProductVariant/…
-       *    string — and was handed the bare numeric id cart/add.js wants. The
-       *    call resolved, the cart never changed, and the drawer opened empty.
-       *    Same approach, correct id.
+       * Shopify.actions.updateCart is present on this theme and DOES update the
+       * cart: no userErrors, the line appears, totalQuantity rises. What it does
+       * not do is redraw the drawer — the drawer's innerHTML was byte-identical
+       * before and after, so openCart then slid out the markup rendered at page
+       * load. That is the "your cart is empty" over a cart with two items in it.
        *
-       * 2. cart/add.js asking for the drawer sections back. Shopify re-renders
-       *    them server-side and returns the markup, which is how Dawn and the
-       *    themes derived from it refresh without a reload. Swapping that markup
-       *    in is what makes the drawer show the truth.
-       *
-       * 3. Navigating to the cart. Correct everywhere and disruptive everywhere,
-       *    so it is the floor, not the plan — a shopper mid-outfit should not be
-       *    thrown off the product page.
+       * The flow that works is Dawn's own:
+       *   1. cart/add.js, asking for cart-drawer and cart-icon-bubble back.
+       *      getSectionsToRender() on the drawer names exactly those two.
+       *   2. drawer.renderContents(response) — its own method, which swaps the
+       *      returned markup into the right nodes.
+       *   3. Clear `is-empty`. This is the step nothing else does: the class
+       *      sits on the <cart-drawer> ELEMENT here, and renderContents only
+       *      clears it from .drawer__inner. Verified live — the items were in
+       *      the markup the whole time, hidden by that one class.
+       *   4. open().
        */
-      function openDrawer() {
-        var actions = window.Shopify.actions;
-        if (actions && typeof actions.openCart === 'function') {
-          try { actions.openCart(); return true; } catch (err) { /* try the DOM */ }
-        }
-        // Dawn and its descendants expose a <cart-drawer> element with open().
-        var drawer = document.querySelector('cart-drawer');
-        if (drawer && typeof drawer.open === 'function') {
-          try { drawer.open(); return true; } catch (err) { /* fall through */ }
-        }
-        return false;
-      }
+      var drawer = document.querySelector('cart-drawer');
+      var canRenderDrawer = drawer && typeof drawer.renderContents === 'function';
 
-      /**
-       * Hand the response to the theme and let it redraw itself.
-       *
-       * This used to swap the returned markup in by hand: find a container,
-       * assign innerHTML. When the exact wrapper could not be matched it fell
-       * back to the whole document body, so a complete cart section was placed
-       * INSIDE the existing cart section — which is why the drawer showed "Your
-       * cart" twice, once empty and once real, stacked.
-       *
-       * Dawn and the themes derived from it expose renderContents() on the
-       * <cart-drawer> element for exactly this. It knows its own structure and
-       * which nodes to replace. Using it is correct by construction, where
-       * guessing at selectors from outside the theme is correct by luck.
-       */
-      function renderIntoDrawer(payload) {
-        var drawer = document.querySelector('cart-drawer');
-        if (drawer && typeof drawer.renderContents === 'function') {
-          try { drawer.renderContents(payload); return true; } catch (err) {
-            console.warn('[emodeAI] cart-drawer.renderContents failed:', err);
-          }
-        }
-        return false;
-      }
-
-      var actions = window.Shopify.actions;
-      if (actions && typeof actions.updateCart === 'function') {
-        actions.updateCart({
-          lines: cartItems.map(function (it) {
-            // Storefront API ids are gids, not the numeric form cart/add.js uses.
-            return {
-              merchandiseId: 'gid://shopify/ProductVariant/' + it.id,
-              quantity: it.quantity
-            };
+      function syncEmptyClass() {
+        // Ask the cart what it holds rather than assuming the add made it
+        // non-empty — a rejected line would otherwise leave the drawer lying in
+        // the other direction.
+        return fetch(root + 'cart.js')
+          .then(function (r) { return r.json(); })
+          .then(function (cart) {
+            var empty = !cart || cart.item_count === 0;
+            drawer.classList.toggle('is-empty', empty);
+            var inner = drawer.querySelector('.drawer__inner');
+            if (inner) inner.classList.toggle('is-empty', empty);
           })
-        }).then(function () {
-          console.log('[emodeAI] Added to cart via standard actions:', cartItems);
-          closeEmodeModal();
-          openDrawer();
-        }).catch(function (err) {
-          console.warn('[emodeAI] updateCart failed, falling back to cart/add.js:', err);
-          rawAdd();
-        });
-      } else {
-        rawAdd();
+          .catch(function () { /* leave the class as the theme set it */ });
       }
 
-      function rawAdd() {
+      if (canRenderDrawer) {
         fetch(root + 'cart/add.js', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({
             items: cartItems,
-            // Ask for the drawer back, re-rendered with the new contents.
             sections: 'cart-drawer,cart-icon-bubble',
             sections_url: window.location.pathname
           })
@@ -587,20 +546,65 @@
           return res.json().then(function (data) {
             console.log('[emodeAI] Added to cart:', cartItems);
             closeEmodeModal();
-
-            // Let the theme redraw, then open. If it cannot redraw itself,
-            // the drawer would show what was on the page at load — so leave
-            // instead. A stale "your cart is empty" is worse than navigating.
-            if (renderIntoDrawer(data)) {
-              openDrawer();
-            } else {
-              window.location.href = root + 'cart';
+            try { drawer.renderContents(data); } catch (err) {
+              console.warn('[emodeAI] renderContents failed:', err);
             }
+            return syncEmptyClass().then(function () {
+              if (typeof drawer.open === 'function') drawer.open();
+            });
           });
         }).catch(function (err) {
           console.error('[emodeAI] Add to cart failed:', err, 'sent:', cartItems);
         });
+        return;
       }
+
+      // No Dawn-style drawer. updateCart at least refreshes in place on themes
+      // that implement it, and openCart falls back to the cart page on those
+      // that do not.
+      var actions = window.Shopify.actions;
+      if (actions && typeof actions.updateCart === 'function') {
+        actions.updateCart({
+          lines: cartItems.map(function (it) {
+            // Storefront API ids are gids, not the numeric form cart/add.js uses.
+            return {
+              merchandiseId: 'gid://shopify/ProductVariant/' + it.id,
+              quantity: it.quantity
+            };
+          })
+        }).then(function (result) {
+          if (result && result.userErrors && result.userErrors.length) {
+            console.error('[emodeAI] updateCart rejected:', result.userErrors);
+            return;
+          }
+          console.log('[emodeAI] Added to cart via standard actions:', cartItems);
+          closeEmodeModal();
+          if (typeof actions.openCart === 'function') actions.openCart();
+        }).catch(function (err) {
+          console.error('[emodeAI] updateCart failed:', err, 'sent:', cartItems);
+        });
+        return;
+      }
+
+      // Nothing to render into and no actions runtime: the cart page is the
+      // only honest way left to show what happened.
+      fetch(root + 'cart/add.js', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ items: cartItems })
+      }).then(function (res) {
+        if (!res.ok) {
+          return res.text().then(function (body) {
+            console.error('[emodeAI] Add to cart refused by Shopify.',
+              res.status, body, 'sent:', cartItems);
+          });
+        }
+        console.log('[emodeAI] Added to cart:', cartItems);
+        closeEmodeModal();
+        window.location.href = root + 'cart';
+      }).catch(function (err) {
+        console.error('[emodeAI] Add to cart failed:', err, 'sent:', cartItems);
+      });
     }
   });
 
