@@ -9,3 +9,11 @@ dist/
 
 # Turborepo local cache/daemon logs
 .turbo/
+
+# TypeScript incremental build state. Machine-local and it changes on every
+# build, so tracking it means every unrelated commit carries a diff.
+*.tsbuildinfo
+
+# Generated listing assets. Large binaries that are rebuilt rather than edited,
+# and 8MB of superseded screenshots is not repository history.
+artifacts/
