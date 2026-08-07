@@ -1,0 +1,67 @@
+name: Deploy Shopify app
+
+# The repo has two deploy targets and only one of them was automatic.
+#
+# apps/web ships from GitHub through Vercel. The Shopify app runs on Fly and had
+# nothing shipping it, so a change could be committed, pushed, reviewed and
+# merged while the running app stayed three days stale. That happened: a
+# dashboard rewrite sat in main, unshipped, looking like the code had not worked.
+on:
+  push:
+    branches: [main]
+    paths:
+      - 'apps/emode-tryon/**'
+      - '.github/workflows/deploy-shopify.yml'
+  # For redeploying the current commit without an empty push.
+  workflow_dispatch:
+
+# Two pushes in quick succession must not race each other onto the same
+# machines. Later wins, and the earlier one is not cancelled midway through a
+# deploy that has already started replacing containers.
+concurrency:
+  group: deploy-shopify
+  cancel-in-progress: false
+
+jobs:
+  deploy:
+    name: fly deploy
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: superfly/flyctl-actions/setup-flyctl@master
+
+      - name: Deploy
+        # The Dockerfile is self-contained inside this directory: it copies its
+        # own package.json, installs, and builds. So the build context is here
+        # rather than the repo root, and fly.toml sits alongside it.
+        working-directory: apps/emode-tryon/emode-tryon
+        env:
+          FLY_API_TOKEN: ${{ secrets.FLY_API_TOKEN }}
+        run: |
+          if [ -z "$FLY_API_TOKEN" ]; then
+            echo "FLY_API_TOKEN is not set."
+            echo "Create an app-scoped token with:  fly tokens create deploy -a emode-tryon"
+            echo "then add it under Settings > Secrets and variables > Actions."
+            exit 1
+          fi
+          flyctl deploy --remote-only --app emode-tryon
+
+      - name: Confirm it is serving
+        # A green deploy step means the machines accepted the image, not that the
+        # app came up. Remix takes a few seconds to bind, so this waits rather
+        # than reporting success over a container that is still starting.
+        run: |
+          for attempt in $(seq 1 10); do
+            code=$(curl -s -o /dev/null -w '%{http_code}' --max-time 15 https://emode-tryon.fly.dev/ || echo 000)
+            if [ "$code" = "200" ] || [ "$code" = "302" ] || [ "$code" = "410" ]; then
+              echo "Serving (HTTP $code) after $attempt attempt(s)."
+              exit 0
+            fi
+            echo "attempt $attempt: HTTP $code, waiting"
+            sleep 6
+          done
+          echo "App did not return a healthy status after deploy."
+          exit 1
