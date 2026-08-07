@@ -5,6 +5,17 @@ import Link from 'next/link';
 import { ArrowRight, Check } from 'lucide-react';
 import { supabase } from '../../../lib/supabase/browser';
 
+/**
+ * Must agree with PLAN_CONFIG in lib/stripe-plan-config.ts, which is what
+ * /api/generate actually enforces.
+ *
+ * Growth used to say "Unlimited try-ons" and "Unlimited generations". No plan
+ * has been unlimited since allowances moved to 500/2000/5000 — an unbounded
+ * tier is an unbounded bill for us, because every try-on is a paid image
+ * generation. So the page promised something the system stops, and the person
+ * who found out would be a Growth customer mid-campaign, which is a refund and
+ * a bad review rather than a support ticket.
+ */
 const PLANS = [
     {
         planId: 'starter',
@@ -12,7 +23,7 @@ const PLANS = [
         price: '$29',
         period: '/mo',
         blurb: 'Let customers see it on themselves.',
-        features: ['Virtual try-on widget', 'Embed on any website', 'Basic analytics'],
+        features: ['500 try-ons a day', 'Virtual try-on widget', 'Embed on any website', 'Basic analytics'],
     },
     {
         planId: 'pro',
@@ -20,7 +31,7 @@ const PLANS = [
         price: '$79',
         period: '/mo',
         blurb: 'For brands that are scaling.',
-        features: ['Everything in Starter', 'Marketplace listing', 'Advanced analytics', 'No emode branding'],
+        features: ['2,000 try-ons a day', 'Everything in Starter', 'Marketplace listing', 'Advanced analytics', 'No emode branding'],
         featured: true,
     },
     {
@@ -28,8 +39,8 @@ const PLANS = [
         name: 'Growth',
         price: '$149',
         period: '/mo',
-        blurb: 'Unlimited try-ons.',
-        features: ['Everything in Pro', 'Unlimited generations', 'Priority processing'],
+        blurb: 'For high-traffic catalogues.',
+        features: ['5,000 try-ons a day', 'Everything in Pro', 'Model photography', 'Priority processing'],
     },
 ];
 

@@ -98,19 +98,26 @@ export async function POST(request: Request) {
                 // Link the merchant to the buyer's emode account: prefer the userId the
                 // checkout was initiated with (deterministic); fall back to matching the
                 // Stripe email against Supabase auth users.
-                let ownerUserId: string | null = userId || null;
-                if (!ownerUserId && customerEmail) {
-                    try {
-                        const { data: authData } = await supabase.auth.admin.listUsers();
-                        const users = (authData as any)?.users || [];
-                        const matchingUser = users.find((u: any) => u.email === customerEmail);
-                        if (matchingUser) {
-                            ownerUserId = matchingUser.id;
-                        }
-                    } catch (e) {
-                        console.warn('[Stripe Webhook] Could not list auth users:', e);
-                    }
-                }
+                // Only the userId the checkout actually carried. There used to
+                // be a fallback here that listed every auth user and matched the
+                // Stripe email, which handed the purchase to whichever account
+                // happened to share an address with the payment method.
+                //
+                // Wallets make that the wrong guess. Link, Apple Pay and Google
+                // Pay fill the email in themselves, so someone who already has a
+                // personal account and is buying for their business had the
+                // store attached to the personal one, silently, before they had
+                // even finished signing up — and nothing could move it
+                // afterwards, because ownership is deliberately one-way.
+                //
+                // Leaving it null loses nothing. getMerchantForUser() already
+                // claims an unowned merchant whose shop_domain matches the
+                // login email, so paying and signing in with the same address
+                // still resolves on the first visit. What changes is that a
+                // different address is now also possible, through
+                // /api/merchant/claim and the checkout session. The decision
+                // moves to the buyer instead of being made by their wallet.
+                const ownerUserId: string | null = userId || null;
 
                 // Generate brand slug from shop domain or email
                 const shopId = shopDomain || customerEmail || session.id;
