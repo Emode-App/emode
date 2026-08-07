@@ -483,9 +483,18 @@
        * not. Where the runtime is missing, going to the cart is the honest
        * fallback — they pressed a button called Purchase Look.
        */
-      function revealCart() {
+      function revealCart(cartWasRefreshed) {
         var actions = window.Shopify.actions;
-        if (actions && typeof actions.openCart === 'function') {
+
+        // openCart only OPENS the drawer — it does not re-render it. After a
+        // raw cart/add.js the drawer is still whatever the theme rendered at
+        // page load, so it slides out saying "Your cart is empty" over a cart
+        // that now has two items in it. That is worse than showing nothing: it
+        // states the opposite of the truth.
+        //
+        // So the drawer is only used when updateCart refreshed it for us.
+        // Otherwise a real navigation to the cart page, which cannot be stale.
+        if (cartWasRefreshed && actions && typeof actions.openCart === 'function') {
           try { actions.openCart(); return; } catch (err) { /* fall through */ }
         }
         window.location.href = root + 'cart';
@@ -503,7 +512,7 @@
         }).then(function () {
           console.log('[emodeAI] Added to cart:', cartItems);
           closeEmodeModal();
-          revealCart();
+          revealCart(true); // updateCart refreshed the cart in place
         }).catch(function (err) {
           console.error('[emodeAI] Add to cart failed:', err, 'sent:', cartItems);
         });
@@ -526,7 +535,7 @@
         }
         console.log('[emodeAI] Added to cart:', cartItems);
         closeEmodeModal();
-        revealCart();
+        revealCart(false); // raw add — the drawer still holds stale markup
       }).catch(function (err) {
         console.error('[emodeAI] Add to cart failed:', err, 'sent:', cartItems);
       });

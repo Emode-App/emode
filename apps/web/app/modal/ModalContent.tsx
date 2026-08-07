@@ -204,6 +204,25 @@ export function ModalContent({ initialProduct, onClose }: ModalContentProps) {
     const visitorId = searchParams.get('vid') || '';
     const originHost = searchParams.get('origin') || '';
     const [merchantId, setMerchantId] = useState(searchParams.get('merchant') || '');
+
+    /**
+     * Where a guest's dressing room is stored — and it must not move.
+     *
+     * This was keyed on merchantId, which is empty on first render for Shopify
+     * (the block sends ?shop=, not ?merchant=) and only fills in once the
+     * lookup returns. So the room was hydrated from "default", then rehydrated
+     * from the resolved id a moment later, and written to whichever key was
+     * current at the time. Deleting an item saved an empty room under one key
+     * while the other still held it, and the items came back on reopen.
+     *
+     * It hid while the lookup was broken, because merchantId then stayed empty
+     * forever — consistently wrong is stable. Fixing the lookup is what made it
+     * start moving.
+     *
+     * shopDomain and ?merchant= are both present in the URL on first paint, so
+     * either is a fixed point for the life of the modal.
+     */
+    const roomKey = shopDomain || searchParams.get('merchant') || 'default';
     const [user, setUser] = useState<any>(null);
 
     useEffect(() => {
@@ -302,7 +321,7 @@ export function ModalContent({ initialProduct, onClose }: ModalContentProps) {
                     }));
                 }
             } else {
-                items = readGuestRoom(merchantId);
+                items = readGuestRoom(roomKey);
             }
 
             if (cancelled) return;
@@ -357,8 +376,8 @@ export function ModalContent({ initialProduct, onClose }: ModalContentProps) {
     // the widget destroying the iframe on close.
     useEffect(() => {
         if (!hydrated || !isGuest) return;
-        writeGuestRoom(merchantId, dressingRoomItems);
-    }, [dressingRoomItems, hydrated, isGuest, merchantId]);
+        writeGuestRoom(roomKey, dressingRoomItems);
+    }, [dressingRoomItems, hydrated, isGuest, roomKey]);
 
     const handleFileUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
         const file = e.target.files?.[0];
