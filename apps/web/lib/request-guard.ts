@@ -1,4 +1,5 @@
 import { createHmac } from 'crypto';
+import { SITE_HOST } from './site';
 
 /**
  * Guards for endpoints a merchant's storefront calls directly.
@@ -110,11 +111,28 @@ function hostOf(value: string | null): string | null {
  * all. So this cannot be strict for everyone yet, and pretending otherwise
  * would silently break every widget merchant.
  *
- * The rule: if we know the merchant's host, the caller must match it. If we do
- * not, the caller is allowed but is not treated as trusted, and the caller-side
- * rate limit still applies. Recording allowed hosts at install is the change
- * that makes this strict everywhere, and it belongs with onboarding rather than
- * here.
+ * ## Our own modal counts as first party
+ *
+ * This rejected every Shopify try-on for three days and nobody noticed, because
+ * the failure is a 403 inside an iframe.
+ *
+ * The try-on does not run on the merchant's page. The theme block opens
+ * `emode.style/modal` in an iframe, and the generate call is made from inside
+ * that iframe — so its Origin is always emode.style, never the storefront.
+ * Compared against a myshopify host, `emode.style !== myshopify.com`, and the
+ * request was refused. Widget merchants were unaffected only because their
+ * shop_domain is an email address and took the early return above, which is why
+ * this looked like it worked.
+ *
+ * Allowing our own host is therefore not a loosening: it is the case the rule
+ * was always meant to permit. What remains blocked is what it was written for —
+ * a curl, a script, or another site posting a merchant id it does not own.
+ *
+ * It does NOT distinguish our modal opened legitimately from our modal opened
+ * by hand with someone else's merchant id, because nothing in the request can:
+ * both are the same page on the same origin. The per-IP daily ceiling is what
+ * bounds that, and binding properly needs merchants to register allowed hosts
+ * at install — which belongs with onboarding, not here.
  */
 export function originMatchesMerchant(request: Request, shopDomain: string | null): boolean {
     if (!shopDomain || shopDomain.includes('@')) return true; // no host on file
@@ -126,5 +144,10 @@ export function originMatchesMerchant(request: Request, shopDomain: string | nul
     // script. Those are exactly the callers this is meant to stop.
     if (!from) return false;
 
-    return baseHost(from) === claimed;
+    const caller = baseHost(from);
+
+    // Our own pages — the modal above all — are first party to every merchant.
+    if (caller === baseHost(SITE_HOST)) return true;
+
+    return caller === claimed;
 }
