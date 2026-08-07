@@ -163,7 +163,7 @@ export default async function ClosetPage() {
                         href="/admin"
                         className="px-6 py-3 border border-black/10 rounded-xl text-xs font-bold uppercase tracking-widest hover:bg-black/5 transition-colors whitespace-nowrap"
                     >
-                        See plans
+                        For brands
                     </Link>
                 </div>
             </div>

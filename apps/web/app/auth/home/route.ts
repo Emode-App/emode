@@ -23,5 +23,11 @@ export async function GET(request: Request) {
     if (!user) return NextResponse.redirect(new URL('/login', origin));
 
     const merchant = await getMerchantForUser();
-    return NextResponse.redirect(new URL(merchant ? '/admin' : '/closet', origin));
+    if (merchant) return NextResponse.redirect(new URL('/admin', origin));
+
+    // No merchant yet. A shopper and a merchant who has not connected a store
+    // are indistinguishable at this point, so the closet stays the default and
+    // carries a link to the dashboard, where /admin now explains how to connect
+    // one rather than presenting a bare paywall.
+    return NextResponse.redirect(new URL('/closet', origin));
 }

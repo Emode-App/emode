@@ -2,7 +2,7 @@ import { BarChart3, Users, Package, Zap, RefreshCw, Crown } from 'lucide-react';
 import { getMerchantForUser, serviceClient } from './admin-util';
 import { WidgetInstallCode } from './components/WidgetInstallCode';
 import { AttributionPanel, TryOnStats } from './components/AttributionPanel';
-import { ChoosePlan } from './components/ChoosePlan';
+import { NoMerchantYet } from './components/NoMerchantYet';
 import { PaymentAlert } from './components/PaymentAlert';
 import { createSupabaseServerClient } from '../../lib/supabase/server';
 
@@ -112,7 +112,7 @@ export default async function AdminDashboard() {
     if (!merchant) {
         const supabase = await createSupabaseServerClient();
         const { data: { user } } = await supabase.auth.getUser();
-        return <ChoosePlan email={user?.email} />;
+        return <NoMerchantYet email={user?.email} />;
     }
 
     const stats = await getStats(merchant?.id);

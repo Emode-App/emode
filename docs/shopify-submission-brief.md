@@ -167,11 +167,24 @@ Both required, both can be the same address:
 
 ## App testing information
 
-**Test account** — required. Provide a working sign-in for the emode dashboard
-at `emode.style/login`. Note in the description that it signs in by magic link,
-so reviewers need an inbox they can reach. Do **not** supply a Google SSO or
-2FA-protected account; the form forbids both. Do not supply Shopify test store
-credentials.
+**Test account** — required, and already created and verified:
+
+```
+Username:  shopify-review@emode.style
+Password:  Walnut-pivot-7198
+```
+
+Email is pre-confirmed and password sign-in is verified against the live auth
+endpoint. No SSO, no 2FA, not a Shopify store credential, so it satisfies all
+three of the form's prohibitions.
+
+Account description:
+
+```
+Merchant dashboard for emodeAI. Sign in at emode.style/login. This account has no store connected yet, so it opens on the connect-your-store screen. Installing the app on a test store attaches that store automatically and the dashboard fills in.
+```
+
+Rotate this password once review is done.
 
 **Screencast URL** — required. Three to eight minutes, showing merchant flow
 (install, theme block, dashboard) and buyer flow (try-on on a storefront).
@@ -189,6 +202,11 @@ Buyer flow
 6. Tap Try This On. The modal opens over the product page.
 7. Upload any full-length photo of a person. A generated try-on appears in a few seconds.
 8. Tap Dressing Room, add a second garment, select both and choose Try Together.
+
+Signing in to the web dashboard
+9. Go to emode.style/login and sign in with the test account above.
+10. It opens on the closet. Choose "For brands" to reach the dashboard.
+11. With no store connected the dashboard explains how to connect one. Shopify merchants install the app and nothing is purchased there, since billing runs through Shopify.
 
 Notes
 - Generation takes roughly five to fifteen seconds.
