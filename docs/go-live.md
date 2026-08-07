@@ -112,5 +112,20 @@ Lifetime codes are redeemed directly against `appsumo_codes` and never touch
 Stripe. An AppSumo launch can go ahead on test-mode Stripe keys without a single
 buyer noticing.
 
-Live keys gate **direct and widget sales**, and Shopify billing. Those are
-separate revenue paths from the AppSumo one, so this does not block that launch.
+Live keys gate **direct and widget sales** only. That is a separate revenue path
+from the AppSumo one, so this does not block that launch.
+
+## Neither does Shopify
+
+Shopify merchants are charged through the Billing API, never Stripe, so no
+Stripe key affects them. There is nothing to flip: `isDevelopmentStore()` in
+`app/routes/app.subscribe.jsx` reads `shop.plan.partnerDevelopment` and passes
+`isTest` accordingly, so a real store is charged for real the first time one
+subscribes, with no configuration change.
+
+One thing to know about that function rather than to change: if the shop-plan
+query fails it returns `true`, meaning a transient Admin API error hands that
+merchant a test subscription they are never billed for. That is deliberate —
+failing toward a free month beats charging someone by accident — but it fails
+silently, so a run of `Could not read shop plan` in the logs is revenue quietly
+going missing, not noise.
