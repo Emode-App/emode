@@ -54,11 +54,19 @@ if (!url || !key) {
 
 const supabase = createClient(url, key);
 
+// Re-export an existing batch without minting more of it. Without this, the
+// only way to regenerate a lost CSV was to run the script again, which mints a
+// whole new set and quietly doubles the batch.
+const exportOnly = process.argv.includes('--export-only');
+
 const codes = new Set();
-while (codes.size < count) codes.add(mintCode());
+if (!exportOnly) {
+    while (codes.size < count) codes.add(mintCode());
+}
 const rows = [...codes].map((code) => ({ code, batch }));
 
-console.log(`Minting ${count} codes for batch "${batch}"...`);
+if (exportOnly) console.log(`Exporting existing batch "${batch}"...`);
+else console.log(`Minting ${count} codes for batch "${batch}"...`);
 
 for (let i = 0; i < rows.length; i += 500) {
     const chunk = rows.slice(i, i + 500);
@@ -75,24 +83,42 @@ for (let i = 0; i < rows.length; i += 500) {
 
 // Only export what is definitely in the database. Handing AppSumo a code that
 // was not stored means a buyer who paid and cannot redeem.
-const { data: stored, error: verifyError } = await supabase
-    .from('appsumo_codes')
-    .select('code')
-    .eq('batch', batch);
+//
+// Paginated, because PostgREST caps a select at 1000 rows by default. Read in
+// one go it returned the first 1000 and the check then declared everything past
+// that missing and aborted. AppSumo's minimum batch is 1000, so the cap bit at
+// exactly the size every real batch starts at: this worked on test runs of 100
+// and could never once have produced a usable CSV.
+const PAGE = 1000;
+const storedSet = new Set();
+for (let from = 0; ; from += PAGE) {
+    const { data, error: verifyError } = await supabase
+        .from('appsumo_codes')
+        .select('code')
+        .eq('batch', batch)
+        .range(from, from + PAGE - 1);
 
-if (verifyError) {
-    console.error('Verification failed:', verifyError.message);
-    process.exit(1);
+    if (verifyError) {
+        console.error('Verification failed:', verifyError.message);
+        process.exit(1);
+    }
+    for (const row of data) storedSet.add(row.code);
+    if (data.length < PAGE) break;
 }
-
-const storedSet = new Set(stored.map((r) => r.code));
 const missing = [...codes].filter((c) => !storedSet.has(c));
 if (missing.length) {
     console.error(`${missing.length} codes did not store. Aborting rather than exporting them.`);
     process.exit(1);
 }
 
-writeFileSync(out, ['code', ...[...codes].map(pretty)].join('\n') + '\n');
+if (!storedSet.size) {
+    console.error(`No codes found in batch "${batch}".`);
+    process.exit(1);
+}
+
+// Export the whole batch, not only what this run minted, so --export-only
+// reproduces the same file the original run produced.
+writeFileSync(out, ['code', ...[...storedSet].map(pretty)].join('\n') + '\n');
 console.log(`\n${storedSet.size} codes in batch "${batch}".`);
 console.log(`CSV written to ${out} — this is the file AppSumo needs.`);
 console.log('Redemption page: https://www.emode.style/redeem');
