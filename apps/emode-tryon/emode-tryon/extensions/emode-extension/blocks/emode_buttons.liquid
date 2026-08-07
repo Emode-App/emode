@@ -450,17 +450,86 @@
         .filter(function (id, i, all) { return all.indexOf(id) === i; })
         .map(function (id) { return { id: id, quantity: 1 }; });
 
-      if (cartItems.length && window.Shopify && window.Shopify.shop) {
-        fetch('/cart/add.js', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ items: cartItems })
-        }).then(function() {
-          closeEmodeModal();
-          // Refresh cart drawer if available
-          if (typeof window.refreshCart === 'function') window.refreshCart();
+      // Every branch below says something. This used to be a bare .then that
+      // closed the modal whatever came back: a 422 for a sold-out or invalid
+      // variant looked exactly like a success, the modal shut, and the shopper
+      // went to a cart with nothing new in it. A silent failure in the buy
+      // button is the most expensive kind there is.
+      if (!cartItems.length) {
+        console.warn('[emodeAI] Add to cart: nothing to add.', {
+          received: e.data.items, fallbackVariantId: e.data.variantId
         });
+        return;
       }
+      if (!window.Shopify || !window.Shopify.shop) {
+        console.warn('[emodeAI] Add to cart: not a Shopify storefront context.');
+        return;
+      }
+
+      // Locale-aware. Hardcoding '/cart/add.js' 404s on a store served under a
+      // locale prefix such as /fr, because the cart routes move with it.
+      var root = (window.Shopify.routes && window.Shopify.routes.root) || '/';
+
+      /**
+       * Show the shopper what just happened.
+       *
+       * The old code called window.refreshCart, which is not a Shopify API and
+       * no theme defines — so the request succeeded, the cart really did change,
+       * and absolutely nothing on screen moved. The shopper concluded the button
+       * was broken, which is exactly what happened here.
+       *
+       * Standard storefront actions are the supported answer: openCart opens a
+       * drawer if the theme has one and redirects to the cart page if it does
+       * not. Where the runtime is missing, going to the cart is the honest
+       * fallback — they pressed a button called Purchase Look.
+       */
+      function revealCart() {
+        var actions = window.Shopify.actions;
+        if (actions && typeof actions.openCart === 'function') {
+          try { actions.openCart(); return; } catch (err) { /* fall through */ }
+        }
+        window.location.href = root + 'cart';
+      }
+
+      var actions = window.Shopify.actions;
+      if (actions && typeof actions.updateCart === 'function') {
+        // Preferred path: the theme (or Shopify's default implementation)
+        // refreshes its own cart UI, and the matching standard events are
+        // emitted for us.
+        actions.updateCart({
+          lines: cartItems.map(function (it) {
+            return { merchandiseId: it.id, quantity: it.quantity };
+          })
+        }).then(function () {
+          console.log('[emodeAI] Added to cart:', cartItems);
+          closeEmodeModal();
+          revealCart();
+        }).catch(function (err) {
+          console.error('[emodeAI] Add to cart failed:', err, 'sent:', cartItems);
+        });
+        return;
+      }
+
+      fetch(root + 'cart/add.js', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ items: cartItems })
+      }).then(function (res) {
+        if (!res.ok) {
+          // Shopify explains the refusal in the body — sold out, no such
+          // variant, quantity unavailable. Worth reading rather than guessing.
+          return res.text().then(function (body) {
+            console.error('[emodeAI] Add to cart refused by Shopify.',
+              res.status, body, 'sent:', cartItems);
+            // Deliberately left open: closing it implies it worked.
+          });
+        }
+        console.log('[emodeAI] Added to cart:', cartItems);
+        closeEmodeModal();
+        revealCart();
+      }).catch(function (err) {
+        console.error('[emodeAI] Add to cart failed:', err, 'sent:', cartItems);
+      });
     }
   });
 
