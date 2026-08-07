@@ -1,6 +1,7 @@
 import { NextResponse } from 'next/server';
 import Stripe from 'stripe';
 import { createClient } from '@supabase/supabase-js';
+import { requireServiceRoleKey } from '../../../../lib/supabase/require-key';
 import { PLAN_CONFIG } from '../../../../lib/stripe-plan-config';
 
 // Lazy for the same reason as the checkout route: `next build` imports this
@@ -18,7 +19,7 @@ function stripe(): Stripe {
 
 const supabase = createClient(
     process.env.NEXT_PUBLIC_SUPABASE_URL!,
-    process.env.SUPABASE_SERVICE_ROLE_KEY || process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!
+    requireServiceRoleKey()
 );
 
 function slugify(text: string): string {

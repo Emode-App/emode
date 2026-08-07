@@ -1,11 +1,12 @@
 import { createClient } from '@supabase/supabase-js';
+import { requireServiceRoleKey } from '../../../lib/supabase/require-key';
 import { Sparkles, ExternalLink, ArrowLeft } from 'lucide-react';
 import Link from 'next/link';
 import { notFound } from 'next/navigation';
 
 const supabase = createClient(
     process.env.NEXT_PUBLIC_SUPABASE_URL!,
-    process.env.SUPABASE_SERVICE_ROLE_KEY || process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!
+    requireServiceRoleKey()
 );
 
 async function getBrand(slug: string) {

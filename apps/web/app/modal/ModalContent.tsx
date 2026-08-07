@@ -113,6 +113,13 @@ export function ModalContent({ initialProduct, onClose }: ModalContentProps) {
 
         const onMessage = (e: MessageEvent) => {
             if (e.source !== window.parent) return;
+
+            // Everything below arrives from whichever site embedded this iframe,
+            // which by design is any merchant, and by accident was any attacker.
+            // The origin cannot be pinned to a list because the whole product is
+            // being embedded on stores we have never seen, so the payloads get
+            // validated instead of the sender being trusted.
+            if (!e.data || typeof e.data !== 'object') return;
             // The extension owns the cross-site dressing room, because a
             // third-party iframe's localStorage is partitioned by the site being
             // viewed - so a dress saved on one shop and a shoe saved on another
@@ -120,13 +127,33 @@ export function ModalContent({ initialProduct, onClose }: ModalContentProps) {
             // rather than replaced: whatever this modal already loaded for a
             // signed-in shopper is still theirs.
             if (e.data?.type === 'emode:dressing-room') {
-                const incoming = Array.isArray(e.data.items) ? e.data.items : [];
-                if (incoming.length) setHandedOverItems(incoming);
+                // Shape-checked and bounded. An embedder can offer items; it
+                // cannot decide how many, how long their text is, or what a
+                // field contains.
+                const incoming = Array.isArray(e.data.items) ? e.data.items.slice(0, 50) : [];
+                const safe = incoming
+                    .filter((i: any) => i && typeof i === 'object' && typeof i.title === 'string')
+                    .map((i: any) => ({
+                        id: typeof i.id === 'string' ? i.id.slice(0, 64) : crypto.randomUUID(),
+                        title: i.title.slice(0, 200),
+                        image: typeof i.image === 'string' && /^https?:\/\//i.test(i.image)
+                            ? i.image.slice(0, 2000)
+                            : '',
+                        price: typeof i.price === 'string' ? i.price.slice(0, 40) : '',
+                        url: typeof i.url === 'string' && /^https?:\/\//i.test(i.url)
+                            ? i.url.slice(0, 2000)
+                            : undefined,
+                    }));
+                if (safe.length) setHandedOverItems(safe);
                 return;
             }
             if (e.data?.type === 'emode:image-options') {
                 const list = Array.isArray(e.data.images) ? e.data.images : [];
-                setImageOptions(list.filter((u: unknown) => typeof u === 'string').slice(0, 8));
+                // http(s) only. A javascript: or data: entry here would be
+                // rendered as a chooser thumbnail.
+                setImageOptions(
+                    list.filter((u: unknown) => typeof u === 'string' && /^https?:\/\//i.test(u)).slice(0, 8)
+                );
                 return;
             }
             if (e.data?.type !== 'emode:image') return;

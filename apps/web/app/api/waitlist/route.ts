@@ -1,9 +1,11 @@
 import { NextResponse } from 'next/server';
+import { clientIp, hashIp, rateLimit } from '../../../lib/request-guard';
 import { createClient } from '@supabase/supabase-js';
+import { requireServiceRoleKey } from '../../../lib/supabase/require-key';
 
 const supabase = createClient(
     process.env.NEXT_PUBLIC_SUPABASE_URL!,
-    process.env.SUPABASE_SERVICE_ROLE_KEY || process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!
+    requireServiceRoleKey()
 );
 
 // Deliberately loose. Strict email regexes reject valid addresses — plus tags,
@@ -21,6 +23,10 @@ const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]{2,}$/;
  */
 export async function POST(request: Request) {
     try {
+        // Signing up for a waitlist is a once-per-person act.
+        if (!rateLimit(`wl:${hashIp(clientIp(request))}`, 5, 60_000)) {
+            return NextResponse.json({ error: 'Too many requests.' }, { status: 429 });
+        }
         const body = await request.json();
         const email = typeof body.email === 'string' ? body.email.trim().toLowerCase() : '';
         const source = typeof body.source === 'string' ? body.source.slice(0, 40) : 'landing';

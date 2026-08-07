@@ -1,10 +1,11 @@
 import { createClient } from '@supabase/supabase-js';
+import { requireServiceRoleKey } from '../../lib/supabase/require-key';
 import { createSupabaseServerClient } from '../../lib/supabase/server';
 import { redirect } from 'next/navigation';
 
 export const serviceClient = createClient(
     process.env.NEXT_PUBLIC_SUPABASE_URL!,
-    process.env.SUPABASE_SERVICE_ROLE_KEY || process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!
+    requireServiceRoleKey()
 );
 
 export async function getMerchantForUser() {

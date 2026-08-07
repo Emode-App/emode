@@ -1,5 +1,7 @@
 import { NextResponse } from 'next/server';
+import { clientIp, hashIp, rateLimit, originMatchesMerchant } from '../../../lib/request-guard';
 import { createClient } from '@supabase/supabase-js';
+import { requireServiceRoleKey } from '../../../lib/supabase/require-key';
 import { resolveOrCaptureProduct } from '../../../lib/product-capture';
 
 const corsHeaders = {
@@ -10,7 +12,7 @@ const corsHeaders = {
 
 const supabase = createClient(
     process.env.NEXT_PUBLIC_SUPABASE_URL!,
-    process.env.SUPABASE_SERVICE_ROLE_KEY || process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!
+    requireServiceRoleKey()
 );
 
 const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
@@ -39,6 +41,14 @@ export async function POST(request: Request) {
             return NextResponse.json({ ok: false }, { status: 400, headers: corsHeaders });
         }
 
+        // This endpoint CREATES product rows, so an unlimited unauthenticated
+        // caller could fill any merchant's catalogue with anything. A real
+        // shopper fires a handful of impressions a minute; 120 leaves that
+        // untouched and stops a script cold.
+        if (!rateLimit(`imp:${hashIp(clientIp(request))}`, 120, 60_000)) {
+            return NextResponse.json({ ok: false }, { status: 429, headers: corsHeaders });
+        }
+
         // Accept either a merchant UUID (widget) or a shop domain (Shopify theme
         // extension). Resolving the domain here means merchants never have to
         // paste an ID into the theme editor — the block works on install.
@@ -58,6 +68,19 @@ export async function POST(request: Request) {
 
         if (!merchantId) {
             return NextResponse.json({ ok: false }, { status: 400, headers: corsHeaders });
+        }
+
+        // A merchantId is public: it sits in a script tag on the merchant's own
+        // storefront. Knowing one was never permission to write to their
+        // catalogue, so require the call to come from a page on their site.
+        const { data: owner } = await supabase
+            .from('merchants')
+            .select('shop_domain')
+            .eq('id', merchantId)
+            .maybeSingle();
+
+        if (!originMatchesMerchant(request, owner?.shop_domain ?? null)) {
+            return NextResponse.json({ ok: false }, { status: 403, headers: corsHeaders });
         }
 
         // Resolve the product, creating it when this merchant has not been seen

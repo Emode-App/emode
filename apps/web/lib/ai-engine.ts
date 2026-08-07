@@ -4,6 +4,87 @@
  */
 
 import { GoogleGenerativeAI } from "@google/generative-ai";
+import { lookup } from "node:dns/promises";
+import { isIP } from "node:net";
+
+
+/**
+ * Is this address inside the network we are running on?
+ *
+ * Covers the ranges an SSRF actually aims at: loopback, RFC1918, link-local
+ * (which is where cloud metadata services live), carrier-grade NAT, and the
+ * IPv6 equivalents including IPv4-mapped forms like ::ffff:169.254.169.254.
+ */
+function isPrivateAddress(ip: string): boolean {
+    const v = isIP(ip);
+
+    if (v === 4) {
+        const [a, b] = ip.split('.').map(Number);
+        if (a === 10 || a === 127 || a === 0) return true;
+        if (a === 172 && b >= 16 && b <= 31) return true;
+        if (a === 192 && b === 168) return true;
+        if (a === 169 && b === 254) return true;   // link-local, cloud metadata
+        if (a === 100 && b >= 64 && b <= 127) return true; // CGNAT
+        if (a >= 224) return true;                  // multicast and reserved
+        return false;
+    }
+
+    if (v === 6) {
+        const ip6 = ip.toLowerCase();
+        // IPv4 written inside IPv6 is still IPv4.
+        const mapped = ip6.match(/^::ffff:(\d+\.\d+\.\d+\.\d+)$/);
+        if (mapped) return isPrivateAddress(mapped[1]);
+        if (ip6 === '::1' || ip6 === '::') return true;
+        if (/^f[cd]/.test(ip6)) return true;        // unique local
+        if (/^fe[89ab]/.test(ip6)) return true;     // link-local
+        return false;
+    }
+
+    // Unparseable is not provably public.
+    return true;
+}
+
+/**
+ * Resolve a caller-supplied image URL and refuse anything that points inward.
+ *
+ * productImages arrives straight from the request body, and this function
+ * fetches it server-side. Without this, a caller could aim it at internal hosts
+ * and use the thrown status code as an oracle to map the network from outside.
+ *
+ * DNS is resolved here rather than trusting the hostname, because
+ * "internal.example.com" resolving to 10.0.0.5 looks perfectly public as a
+ * string. This does not close a determined DNS-rebinding attack, where the name
+ * resolves differently between this check and the fetch, but it removes the
+ * straightforward version entirely.
+ */
+async function assertFetchableUrl(raw: string): Promise<void> {
+    let url: URL;
+    try {
+        url = new URL(raw);
+    } catch {
+        throw new Error('That image address could not be read.');
+    }
+
+    if (url.protocol !== 'https:' && url.protocol !== 'http:') {
+        throw new Error('Only http and https image addresses are supported.');
+    }
+
+    const host = url.hostname.replace(/^\[|\]$/g, '');
+
+    // A literal IP needs no lookup, and must not get one.
+    if (isIP(host)) {
+        if (isPrivateAddress(host)) throw new Error('That image address is not reachable.');
+        return;
+    }
+
+    try {
+        const { address } = await lookup(host);
+        if (isPrivateAddress(address)) throw new Error('That image address is not reachable.');
+    } catch (err: any) {
+        if (err?.message === 'That image address is not reachable.') throw err;
+        throw new Error('That image address could not be resolved.');
+    }
+}
 
 export interface GenerationRequest {
     userImage: string; // Base64 data URL or standard URL
@@ -68,10 +149,12 @@ class AIEngine {
 
         if (!/^https?:\/\//i.test(url)) {
             throw new Error(
-                `Product image URL is not absolute (${url.substring(0, 80)}). ` +
-                `It must start with http:// or https://.`
+                'That product image address is not usable. It must start with http:// or https://.'
             );
         }
+
+        // Refuse anything pointing at our own network before touching it.
+        await assertFetchableUrl(url);
 
         // Otherwise fetch the URL
         console.log("[Nano Banana Pro] Fetching image URL:", url.substring(0, 80));
@@ -83,7 +166,13 @@ class AIEngine {
                 headers: { 'User-Agent': 'Mozilla/5.0 (compatible; NanoBananaPro/1.0)' }
             });
             clearTimeout(timeout);
-            if (!response.ok) throw new Error(`Failed to fetch image: ${response.status} ${response.statusText} — ${url}`);
+            // Deliberately vague to the caller. Returning the upstream status
+            // and URL turns a blind server-side fetch into a port scanner with a
+            // readable result. The detail goes to our logs instead.
+            if (!response.ok) {
+                console.error('[Nano Banana Pro] Upstream image fetch failed:', response.status, url.substring(0, 120));
+                throw new Error('That product image could not be loaded.');
+            }
             const arrayBuffer = await response.arrayBuffer();
             const detectedMime = response.headers.get('content-type')?.split(';')[0] || mimeType;
             console.log("[Nano Banana Pro] Fetched image OK, bytes:", arrayBuffer.byteLength, "mime:", detectedMime);
@@ -95,7 +184,10 @@ class AIEngine {
             };
         } catch (error: any) {
             console.error("[Nano Banana Pro] Failed to fetch image URL:", url.substring(0, 120), "—", error.message);
-            throw new Error(`Failed to process input image (${url.substring(0, 60)}...): ${error.message}`);
+            // Same reasoning: the caller learns that it failed, not what failed.
+            throw new Error(error?.message?.startsWith('That image address')
+                ? error.message
+                : 'That product image could not be loaded.');
         }
     }
 

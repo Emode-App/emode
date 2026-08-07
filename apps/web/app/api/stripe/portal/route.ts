@@ -1,6 +1,7 @@
 import { NextResponse } from 'next/server';
 import Stripe from 'stripe';
 import { createClient } from '@supabase/supabase-js';
+import { requireServiceRoleKey } from '../../../../lib/supabase/require-key';
 
 // Constructed on first request, not at module load: `next build` imports every
 // route to collect page data, and a module-scope `new Stripe(undefined)` fails
@@ -17,7 +18,7 @@ function stripe(): Stripe {
 
 const supabase = createClient(
     process.env.NEXT_PUBLIC_SUPABASE_URL!,
-    process.env.SUPABASE_SERVICE_ROLE_KEY || process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!
+    requireServiceRoleKey()
 );
 
 /**

@@ -1,5 +1,7 @@
 import { NextResponse } from 'next/server';
+import { clientIp, hashIp, rateLimit, originMatchesMerchant } from '../../../lib/request-guard';
 import { createClient } from '@supabase/supabase-js';
+import { requireServiceRoleKey } from '../../../lib/supabase/require-key';
 
 const corsHeaders = {
     'Access-Control-Allow-Origin': '*',
@@ -9,7 +11,7 @@ const corsHeaders = {
 
 const supabase = createClient(
     process.env.NEXT_PUBLIC_SUPABASE_URL!,
-    process.env.SUPABASE_SERVICE_ROLE_KEY || process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!
+    requireServiceRoleKey()
 );
 
 const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
@@ -27,11 +29,14 @@ export async function OPTIONS() {
  * Shopify-only — try-on counts for everyone, conversion and revenue for Shopify
  * merchants alone.
  *
- * Trust model: this is a public endpoint called from the merchant's own page,
- * so the totals are as trustworthy as the merchant's own site. That is
- * acceptable — the numbers are reported back to the same merchant, and nobody
- * gains anything by inflating their own dashboard. It is deliberately NOT used
+ * Trust model: the totals are as trustworthy as the merchant's own site, and
+ * the numbers are reported back to that same merchant. Deliberately NOT used
  * for billing.
+ *
+ * That reasoning only holds if the caller IS the merchant's site, which it did
+ * not previously have to be. CORS is '*' and a merchantId is public, so anyone
+ * could post orders with any total against any merchant and poison their
+ * attribution. The origin check below is what makes the paragraph above true.
  */
 export async function POST(request: Request) {
     try {
@@ -48,11 +53,25 @@ export async function POST(request: Request) {
 
         // Only record orders for merchants that exist. Otherwise a stray or
         // mistyped id would create rows attributable to nobody.
+        if (!rateLimit(`ord:${hashIp(clientIp(request))}`, 60, 60_000)) {
+            return NextResponse.json(
+                { error: 'Too many requests.' },
+                { status: 429, headers: corsHeaders }
+            );
+        }
+
         const { data: merchant } = await supabase
             .from('merchants')
-            .select('id')
+            .select('id, shop_domain')
             .eq('id', merchantId)
             .maybeSingle();
+
+        if (merchant && !originMatchesMerchant(request, merchant.shop_domain)) {
+            return NextResponse.json(
+                { error: 'Not permitted from this origin.' },
+                { status: 403, headers: corsHeaders }
+            );
+        }
 
         if (!merchant) {
             return NextResponse.json(

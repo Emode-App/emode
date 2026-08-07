@@ -3,7 +3,9 @@ import { resolveOrCaptureProduct, CapturedProduct } from '../../../lib/product-c
 import { createHmac } from 'crypto';
 import { aiEngine } from '../../../lib/ai-engine';
 import { createClient } from '@supabase/supabase-js';
+import { requireServiceRoleKey } from '../../../lib/supabase/require-key';
 import { SITE_HOST } from '../../../lib/site';
+import { originMatchesMerchant } from '../../../lib/request-guard';
 
 const corsHeaders = {
     'Access-Control-Allow-Origin': '*',
@@ -25,7 +27,7 @@ const IP_DAILY_CEILING = Number(process.env.EMODE_IP_DAILY_CEILING || 40);
 // Service role client for entitlement checks
 const supabase = createClient(
     process.env.NEXT_PUBLIC_SUPABASE_URL!,
-    process.env.SUPABASE_SERVICE_ROLE_KEY || process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!
+    requireServiceRoleKey()
 );
 
 export async function OPTIONS() {
@@ -301,6 +303,28 @@ export async function POST(request: Request) {
         // gets a stable counter — it is forgeable, which is exactly why the IP
         // ceiling above exists.
         const merchantId = body.merchantId || '';
+
+        // A merchantId buys generations against that merchant's daily cap, and a
+        // merchantId is public: it is in a script tag on their storefront, and
+        // /modal reads it straight from the query string. So anyone could open
+        // the modal with someone else's id and burn their quota to zero, at our
+        // Gemini cost. Require the call to come from a page on their own site.
+        if (merchantId && merchantId !== 'demo_hero_interactive') {
+            const { data: owner } = await supabase
+                .from('merchants')
+                .select('shop_domain')
+                .eq('id', merchantId)
+                .maybeSingle();
+
+            if (!originMatchesMerchant(request, owner?.shop_domain ?? null)) {
+                await Promise.all(reserved.map(release));
+                return NextResponse.json(
+                    { error: 'This try-on cannot be run from here.' },
+                    { status: 403, headers: corsHeaders }
+                );
+            }
+        }
+
         const authedUserId = merchantId ? null : await getUserIdFromRequest(request);
         const guestId = !merchantId && !authedUserId && typeof body.guestId === 'string' && UUID_RE.test(body.guestId)
             ? body.guestId
