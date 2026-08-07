@@ -3,47 +3,46 @@
 Split by who can actually do each item. Everything under "code" is done;
 everything under "accounts" needs a login I do not have.
 
+## Done
+
+- **Custom SMTP** — configured in Supabase, sending as `support@emode.style` via
+  GoMailify. MX, SPF and DMARC are live on the domain, so that address receives
+  as well as sends.
+- **Supabase auth email rate limit** — raised above the 30/hour default that
+  applies once custom SMTP is switched on. That default would have locked out
+  everyone past the thirtieth signup in the first hour of an AppSumo launch.
+- **Magic link email template** — points at
+  `{{ .SiteURL }}/auth/callback?token_hash={{ .TokenHash }}&type=email`, so a
+  link works in a browser other than the one that asked for it.
+- **Shopify public distribution** — enabled. The Billing API refuses to charge
+  anyone until an app is publicly distributed, so this gated all Shopify revenue.
+- **AppSumo codes** — batch `launch-2026-08`, 3000 minted and verified against
+  the database. The CSV lives outside the repo; every line is a bearer token.
+- **AppSumo redemption URL** — `https://www.emode.style/redeem`, live, and the
+  signed-out path keeps a pasted code across sign-in.
+
 ## Blocking, and only you can do them
 
-### 1. Custom SMTP  ·  blocks any launch that sends email
-
-Supabase's built-in sender is rate limited to a handful of messages an hour and
-is explicitly not for production. An AppSumo launch sends hundreds of magic links
-in the first hour; everyone past the cap is locked out on day one.
-
-1. Create a sending account — Resend's free tier is 3,000/month.
-2. Verify your domain there (SPF and DKIM records).
-3. Supabase → Project Settings → Authentication → SMTP Settings.
-
-There is no way around needing a provider account and DNS access.
-
-### 2. Magic link email template  ·  blocks sign-in from a second device
-
-Supabase → Authentication → Email Templates → **Magic Link**:
-
-```html
-<a href="{{ .SiteURL }}/auth/callback?token_hash={{ .TokenHash }}&type=email">Sign in</a>
-```
-
-Server side is deployed. Until this changes, a link only works when it happens to
-open in the same browser that requested it. See `docs/auth-email-template.md`.
-
-### 3. Shopify: Public distribution  ·  blocks charging Shopify merchants
-
-Partner dashboard → app → Distribution → **Public**. Until then the Billing API
-returns "Apps without a public distribution cannot use the Billing API", so no
-Shopify merchant can pay — which also makes plan tiering there theoretical.
-
-### 4. Shopify: protected customer data  ·  blocks every revenue number
+### 1. Shopify: protected customer data  ·  blocks every revenue number
 
 Partner dashboard → app → API access → Protected customer data access. Request
-Level 1 plus the **Orders** data field. Use case: attributing try-ons to purchases
-for merchant analytics.
+Level 1 plus the **Orders** data field. Use case: attributing try-ons to
+purchases for merchant analytics.
 
 Approval takes time and is not guaranteed, so start it before you need it. Until
 then `orders/create` and `refunds/create` cannot even be declared — `shopify app
 deploy` rejects the whole version — which is why they sit commented out in
 `shopify.app.toml`. Everything downstream exists; switching it on is config-only.
+
+Answers to the access questionnaire are grounded in what the code does: no
+customer names, emails, phone numbers or addresses are ever received or stored,
+so request **no protected customer fields**, only the Orders resource.
+
+### 2. AppSumo: submit the listing
+
+Copy is drafted. Still needs founding date, headquarters city, LinkedIn URL,
+team size, stage and funding, plus the six screenshots.
+
 
 ## Required, and not started
 
@@ -58,8 +57,8 @@ Submission work, not bugs.
   justifications, which are what decides how long review takes. What is left is
   yours: five screenshots, and pressing submit. Budget two to four weeks for
   review — `<all_urls>` routes it to a human.
-- **AppSumo partner approval** — applying and being accepted, ahead of any listing
-  assets. The redemption flow itself is built and tested end to end.
+- **AppSumo partner approval** — applying and being accepted. Codes, redemption
+  URL and listing copy are all ready and waiting on it.
 
 ## Worth a decision before a thousand strangers arrive
 
@@ -87,6 +86,11 @@ Submission work, not bugs.
   collided on a global unique constraint. That is what a codebase built and tested
   with one of everything looks like. AppSumo delivers a thousand of everything on
   day one, and more of these almost certainly exist.
+
+- **The signed-out redemption path has not been walked live.** Open /redeem in a
+  private window, paste a code, sign in with an address that has no account, and
+  confirm the link brings you back with the code still in the box. Everything in
+  it is verified in code and none of it is verified through a real inbox.
 
 - **Dunning is handled, but has never been exercised.** A failed payment now
   marks the merchant `past_due`, keeps their service running while Stripe
