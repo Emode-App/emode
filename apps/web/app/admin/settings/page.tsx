@@ -3,6 +3,7 @@ import { Settings, Save, AlertCircle } from 'lucide-react';
 import { revalidatePath } from 'next/cache';
 import { SITE_HOST } from '../../../lib/site';
 import { ManageBilling } from './ManageBilling';
+import { ChangePassword } from './ChangePassword';
 
 export const dynamic = 'force-dynamic';
 
@@ -33,14 +34,22 @@ export default async function AdminSettingsPage() {
         revalidatePath('/admin');
     }
 
+    // No store yet is not a reason to be locked out of your own account. This
+    // branch used to be a dead end with nothing on it but an explanation, which
+    // meant the one setting that has nothing to do with owning a store — your
+    // password — was unreachable for exactly the people most likely to be
+    // mid-setup and wanting to change it.
     if (!merchant) {
         return (
-            <div className="p-12 text-center">
-                <AlertCircle className="w-12 h-12 mx-auto mb-4 text-charcoal/40" />
-                <h2 className="text-2xl font-heading font-bold mb-2">No Merchant Profile</h2>
-                <p className="text-charcoal/60">
-                    You are logged in but not associated with a merchant account.
-                </p>
+            <div className="max-w-3xl">
+                <div className="p-12 text-center mb-8">
+                    <AlertCircle className="w-12 h-12 mx-auto mb-4 text-charcoal/40" />
+                    <h2 className="text-2xl font-heading font-bold mb-2">No Merchant Profile</h2>
+                    <p className="text-charcoal/60">
+                        You are logged in but not associated with a merchant account.
+                    </p>
+                </div>
+                <ChangePassword />
             </div>
         );
     }
@@ -121,6 +130,10 @@ export default async function AdminSettingsPage() {
                         </p>
                     </div>
                 </div>
+            </div>
+
+            <div className="mt-8">
+                <ChangePassword />
             </div>
 
             <div className="mt-8">
