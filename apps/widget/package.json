@@ -6,7 +6,7 @@
         "build": "tsup src/index.ts --format iife --minify --clean && npm run deploy:web",
         "deploy:web": "node -e \"require('fs').copyFileSync('dist/index.global.js', '../web/public/widget.js'); console.log('Copied widget build to apps/web/public/widget.js')\"",
         "dev": "tsup src/index.ts --format iife --watch",
-        "test": "npm run build --silent && node --test \"test/*.test.mjs\""
+        "test": "node --test \"test/*.test.mjs\""
     },
     "devDependencies": {
         "tsup": "latest",

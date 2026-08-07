@@ -4,8 +4,15 @@
         "**/.env.*local"
     ],
     "tasks": {
-        // Tests need no build output and no env; they run against source.
+        // Tests run AFTER build, never beside it.
+        //
+        // The widget's suite runs against its bundled output, so it used to call
+        // `npm run build` itself. Turbo then ran build and test concurrently and
+        // both invoked `tsup --clean` on the same dist/ directory, so one wiped
+        // the other's output mid-copy: "ENOENT: copyfile dist/index.global.js".
+        // Green locally, where caching hid it; red on every clean CI run.
         "test": {
+            "dependsOn": ["build"],
             "outputs": []
         },
         "build": {
