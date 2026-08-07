@@ -1,8 +1,13 @@
 'use client';
 
+import { useEffect, useState } from 'react';
 import Link from 'next/link';
 import { ArrowRight, Store, Code2 } from 'lucide-react';
 import { ChoosePlan } from './ChoosePlan';
+import { supabase } from '../../../lib/supabase/browser';
+
+/** Set by /admin/onboarding when a signed-out buyer lands there after paying. */
+const PENDING_CLAIM_KEY = 'emode.pendingClaimSessionId';
 
 /**
  * Signed in, but no store connected yet.
@@ -26,6 +31,73 @@ import { ChoosePlan } from './ChoosePlan';
  * do buy here.
  */
 export function NoMerchantYet({ email }: { email?: string }) {
+    const [claiming, setClaiming] = useState(false);
+
+    /**
+     * Redeem a purchase made before this account existed.
+     *
+     * This screen is exactly where a buyer whose wallet email differs from
+     * their account email ends up: they paid, the webhook keyed the merchant on
+     * the address Link or Apple Pay supplied, they signed up with the address
+     * they actually wanted, and nothing connects the two. Server-side lookup
+     * cannot fix it, because the only proof lives in localStorage in this
+     * browser.
+     *
+     * It runs here rather than back on onboarding because that is not where
+     * they land. The login page sends everyone to /auth/home regardless of
+     * where they came from, so this is the first screen they see — and the
+     * screen that would otherwise tell a paying customer they have no store.
+     */
+    useEffect(() => {
+        let sessionId: string | null = null;
+        try { sessionId = localStorage.getItem(PENDING_CLAIM_KEY); } catch { return; }
+        if (!sessionId) return;
+
+        (async () => {
+            setClaiming(true);
+            try {
+                const { data: { session } } = await supabase.auth.getSession();
+                if (!session?.access_token) return;
+
+                const res = await fetch('/api/merchant/claim', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                        Authorization: `Bearer ${session.access_token}`,
+                    },
+                    body: JSON.stringify({ sessionId }),
+                });
+
+                if (res.ok) {
+                    try { localStorage.removeItem(PENDING_CLAIM_KEY); } catch { /* private mode */ }
+                    // The merchant is resolved server-side, so the page has to be
+                    // re-rendered by the server to stop showing this screen.
+                    window.location.reload();
+                    return;
+                }
+
+                // 202 means the webhook has not landed yet — leave the key in
+                // place so a refresh retries. Anything else is terminal for this
+                // receipt, and keeping it would retry forever on every visit.
+                if (res.status !== 202) {
+                    try { localStorage.removeItem(PENDING_CLAIM_KEY); } catch { /* private mode */ }
+                }
+            } catch {
+                // Offline or blocked. Keep the key; the next load tries again.
+            } finally {
+                setClaiming(false);
+            }
+        })();
+    }, []);
+
+    if (claiming) {
+        return (
+            <div className="max-w-6xl">
+                <p className="text-charcoal/50">Linking your purchase…</p>
+            </div>
+        );
+    }
+
     return (
         <div className="max-w-6xl">
             <header className="mb-10">

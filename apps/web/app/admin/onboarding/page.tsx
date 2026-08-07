@@ -8,6 +8,14 @@ import { Check, Copy, Sparkles, ArrowRight, Store } from 'lucide-react';
 import Link from 'next/link';
 import { WidgetInstallCode } from '../components/WidgetInstallCode';
 
+/**
+ * Where the checkout session id waits while the buyer goes and makes an
+ * account. The id lives only in this page's URL, and creating an account means
+ * leaving this page, so without somewhere to put it the proof of purchase is
+ * gone by the time they return holding a session that could use it.
+ */
+const PENDING_CLAIM_KEY = 'emode.pendingClaimSessionId';
+
 export default function OnboardingPage() {
     const searchParams = useSearchParams();
     const plan = searchParams.get('plan') || 'starter';
@@ -18,6 +26,7 @@ export default function OnboardingPage() {
     const [saving, setSaving] = useState(false);
     const [saved, setSaved] = useState(false);
     const [copied, setCopied] = useState(false);
+    const [justClaimed, setJustClaimed] = useState(false);
     const [lookupError, setLookupError] = useState<string | null>(null);
     const [buyerEmail, setBuyerEmail] = useState('');
     const [signedIn, setSignedIn] = useState(false);
@@ -37,6 +46,11 @@ export default function OnboardingPage() {
             if (!user) {
                 const sessionId = searchParams.get('session_id');
                 if (!sessionId) return;
+                // Survive the round trip to /login. They leave this page to
+                // create an account, and the session id lives only in this URL,
+                // so without stashing it the proof of purchase is gone by the
+                // time they come back able to use it.
+                try { localStorage.setItem(PENDING_CLAIM_KEY, sessionId); } catch { /* private mode */ }
                 try {
                     const res = await fetch(`/api/merchant/by-session?session_id=${encodeURIComponent(sessionId)}`);
                     const data = await res.json();
@@ -81,12 +95,54 @@ export default function OnboardingPage() {
                     if (merchantByEmail) {
                         setMerchantId(merchantByEmail.id);
                         if (merchantByEmail.brand_name) setBrandName(merchantByEmail.brand_name);
+                    } else {
+                        // Neither owned nor matching their login email. This is
+                        // the wallet case: Link, Apple Pay or Google Pay filled
+                        // in an address they did not choose and may not want the
+                        // account under. The checkout session proves the
+                        // purchase is theirs, so attach it to the account they
+                        // actually made.
+                        let pending = searchParams.get('session_id');
+                        if (!pending) {
+                            try { pending = localStorage.getItem(PENDING_CLAIM_KEY); } catch { /* private mode */ }
+                        }
+                        if (pending) {
+                            try {
+                                const { data: { session } } = await supabase.auth.getSession();
+                                const res = await fetch('/api/merchant/claim', {
+                                    method: 'POST',
+                                    headers: {
+                                        'Content-Type': 'application/json',
+                                        Authorization: `Bearer ${session?.access_token ?? ''}`,
+                                    },
+                                    body: JSON.stringify({ sessionId: pending }),
+                                });
+                                const data = await res.json();
+                                if (res.ok && data.merchantId) {
+                                    setMerchantId(data.merchantId);
+                                    if (data.claimed) setJustClaimed(true);
+                                    try { localStorage.removeItem(PENDING_CLAIM_KEY); } catch { /* private mode */ }
+                                } else if (res.status !== 202) {
+                                    // 202 means the webhook has not landed yet; a
+                                    // refresh fixes it, so do not alarm anyone.
+                                    setLookupError(data.error || 'Could not link your purchase.');
+                                }
+                            } catch {
+                                setLookupError('Could not reach emode. Check your connection and refresh.');
+                            }
+                        }
                     }
                 }
             }
         };
         loadMerchant();
     }, []);
+
+    // Plain /login on purpose. The login page ignores ?next= — every path there
+    // hardcodes /auth/home, deliberately, because Google's redirect allowlist
+    // does not match query strings. So the receipt travels in localStorage
+    // instead, and NoMerchantYet redeems it wherever the buyer lands.
+    const loginHref = '/login';
 
     const handleSaveBrand = async () => {
         if (!merchantId || !brandName.trim()) return;
@@ -196,11 +252,21 @@ export default function OnboardingPage() {
                 Paste this single line of code into your website's HTML, just before the closing <code className="bg-black/5 px-2 py-1 rounded text-sm">&lt;/body&gt;</code> tag.
             </p>
 
+            {/* Worth saying out loud. They paid under one email and signed up
+                under another, which is the moment a buyer most expects to have
+                lost something. */}
+            {justClaimed && (
+                <div className="mb-8 p-5 rounded-2xl bg-green-50 border border-green-100 text-sm text-green-800">
+                    Your purchase is now linked to this account, whichever email you
+                    paid with.
+                </div>
+            )}
+
             {lookupError && (
                 <div className="mb-8 p-5 rounded-2xl bg-red-50 border border-red-100 text-sm text-red-700">
                     {lookupError}{' '}
-                    <Link href="/login" className="underline font-bold">Sign in</Link> with the email
-                    you paid with to get your key.
+                    <Link href={loginHref} className="underline font-bold">Sign in</Link> to get
+                    your key.
                 </div>
             )}
 
@@ -214,13 +280,20 @@ export default function OnboardingPage() {
             {merchantId && !signedIn && (
                 <div className="mb-12 p-6 rounded-2xl bg-white border border-black/5">
                     <h4 className="font-bold text-sm mb-2">Create your account</h4>
+                    {/* This used to insist on "the email you paid with". That was
+                        an instruction to work around the software: wallets fill the
+                        address in themselves, and someone buying for their business
+                        has every reason to want a different one. The claim endpoint
+                        uses the checkout session as proof instead, so any address
+                        works now. */}
                     <p className="text-sm text-charcoal/50 mb-4">
-                        Your widget works right now without one. Sign in with
-                        {buyerEmail ? <b> {buyerEmail}</b> : ' the email you paid with'} to see try-on
-                        counts, conversion and revenue, and to manage your plan.
+                        Your widget works right now without one. Create an account to see
+                        try-on counts, conversion and revenue, and to manage your plan.
+                        Use any email you like — this purchase attaches itself when you
+                        come back.
                     </p>
                     <Link
-                        href="/login"
+                        href={loginHref}
                         className="inline-flex items-center gap-2 px-6 py-3 bg-obsidian text-white rounded-xl text-xs font-bold uppercase tracking-widest hover:bg-black transition-colors"
                     >
                         Sign in <ArrowRight className="w-4 h-4" />
