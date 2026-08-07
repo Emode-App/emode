@@ -484,42 +484,122 @@
        * fallback — they pressed a button called Purchase Look.
        */
       /**
-       * One path, and it is the one that is known to work.
+       * Add, then show the drawer — without leaving the product page.
        *
-       * This briefly preferred Shopify.actions.updateCart, on the reasoning that
-       * the theme would then refresh its own cart UI. Two problems. updateCart
-       * takes a Storefront API merchandiseId — a gid://shopify/ProductVariant/…
-       * string — and it was being handed the bare numeric id that cart/add.js
-       * wants, so it quietly did nothing. And because the call resolved, the
-       * drawer was then opened over a cart that had not changed, which is how a
-       * working add turned into "Your cart is empty".
+       * Three attempts, best first, because no single one works on every theme.
        *
-       * cart/add.js with numeric ids is proven: the console showed res.ok and
-       * both lines accepted. So that is what runs, and the cart page is what
-       * confirms it. A full navigation cannot render stale, which openCart
-       * demonstrably can — and the shopper pressed a button called Purchase
-       * Look, so the cart is where they were going anyway.
+       * 1. Shopify.actions.updateCart. The sanctioned way for an app to change
+       *    a cart: the theme refreshes its own UI and the standard events fire
+       *    for us. This was tried before and appeared to do nothing, because it
+       *    takes a Storefront API merchandiseId — a gid://shopify/ProductVariant/…
+       *    string — and was handed the bare numeric id cart/add.js wants. The
+       *    call resolved, the cart never changed, and the drawer opened empty.
+       *    Same approach, correct id.
+       *
+       * 2. cart/add.js asking for the drawer sections back. Shopify re-renders
+       *    them server-side and returns the markup, which is how Dawn and the
+       *    themes derived from it refresh without a reload. Swapping that markup
+       *    in is what makes the drawer show the truth.
+       *
+       * 3. Navigating to the cart. Correct everywhere and disruptive everywhere,
+       *    so it is the floor, not the plan — a shopper mid-outfit should not be
+       *    thrown off the product page.
        */
-      fetch(root + 'cart/add.js', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ items: cartItems })
-      }).then(function (res) {
-        if (!res.ok) {
-          // Shopify explains the refusal in the body — sold out, no such
-          // variant, quantity unavailable. Worth reading rather than guessing.
-          return res.text().then(function (body) {
-            console.error('[emodeAI] Add to cart refused by Shopify.',
-              res.status, body, 'sent:', cartItems);
-            // Deliberately left open: closing it implies it worked.
-          });
+      function openDrawer() {
+        var actions = window.Shopify.actions;
+        if (actions && typeof actions.openCart === 'function') {
+          try { actions.openCart(); return true; } catch (err) { /* try the DOM */ }
         }
-        console.log('[emodeAI] Added to cart:', cartItems);
-        closeEmodeModal();
-        window.location.href = root + 'cart';
-      }).catch(function (err) {
-        console.error('[emodeAI] Add to cart failed:', err, 'sent:', cartItems);
-      });
+        // Dawn and its descendants expose a <cart-drawer> element with open().
+        var drawer = document.querySelector('cart-drawer');
+        if (drawer && typeof drawer.open === 'function') {
+          try { drawer.open(); return true; } catch (err) { /* fall through */ }
+        }
+        return false;
+      }
+
+      function swapSections(sections) {
+        if (!sections) return false;
+        var swapped = false;
+        Object.keys(sections).forEach(function (name) {
+          var markup = sections[name];
+          if (!markup) return;
+          try {
+            var parsed = new DOMParser().parseFromString(markup, 'text/html');
+            // The section renders wrapped in its own container; find the same
+            // node in the live page and replace only its contents.
+            var incoming = parsed.querySelector('.shopify-section, #shopify-section-' + name) || parsed.body;
+            var target = document.getElementById('shopify-section-' + name)
+              || document.querySelector('#CartDrawer')
+              || document.getElementById(name);
+            if (target && incoming) {
+              target.innerHTML = incoming.innerHTML;
+              swapped = true;
+            }
+          } catch (err) { /* a theme that does not match this shape */ }
+        });
+        return swapped;
+      }
+
+      var actions = window.Shopify.actions;
+      if (actions && typeof actions.updateCart === 'function') {
+        actions.updateCart({
+          lines: cartItems.map(function (it) {
+            // Storefront API ids are gids, not the numeric form cart/add.js uses.
+            return {
+              merchandiseId: 'gid://shopify/ProductVariant/' + it.id,
+              quantity: it.quantity
+            };
+          })
+        }).then(function () {
+          console.log('[emodeAI] Added to cart via standard actions:', cartItems);
+          closeEmodeModal();
+          openDrawer();
+        }).catch(function (err) {
+          console.warn('[emodeAI] updateCart failed, falling back to cart/add.js:', err);
+          rawAdd();
+        });
+      } else {
+        rawAdd();
+      }
+
+      function rawAdd() {
+        fetch(root + 'cart/add.js', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            items: cartItems,
+            // Ask for the drawer back, re-rendered with the new contents.
+            sections: 'cart-drawer,cart-icon-bubble',
+            sections_url: window.location.pathname
+          })
+        }).then(function (res) {
+          if (!res.ok) {
+            // Shopify explains the refusal in the body — sold out, no such
+            // variant, quantity unavailable. Worth reading rather than guessing.
+            return res.text().then(function (body) {
+              console.error('[emodeAI] Add to cart refused by Shopify.',
+                res.status, body, 'sent:', cartItems);
+              // Deliberately left open: closing it implies it worked.
+            });
+          }
+          return res.json().then(function (data) {
+            console.log('[emodeAI] Added to cart:', cartItems);
+            closeEmodeModal();
+
+            var refreshed = swapSections(data && data.sections);
+            var opened = openDrawer();
+
+            // Only leave the page if the drawer could not be made truthful.
+            // Showing a stale "your cart is empty" is worse than navigating.
+            if (!refreshed && !opened) {
+              window.location.href = root + 'cart';
+            }
+          });
+        }).catch(function (err) {
+          console.error('[emodeAI] Add to cart failed:', err, 'sent:', cartItems);
+        });
+      }
     }
   });
 
