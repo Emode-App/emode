@@ -31,11 +31,32 @@ export default function RedeemPage() {
     const [busy, setBusy] = useState(false);
     const [error, setError] = useState<string | null>(null);
     const [justRedeemed, setJustRedeemed] = useState(false);
+    const [email, setEmail] = useState('');
+    const [sending, setSending] = useState(false);
+    const [linkSent, setLinkSent] = useState(false);
+
+    // The code the buyer pasted before they had an account.
+    //
+    // They arrive from AppSumo holding a code and no emode account, so signing
+    // in is unavoidable. What is avoidable is losing the code across it. This
+    // used to hide the input entirely until signed in, which meant a buyer
+    // pasted nothing, went away to sign in, and came back to an empty form with
+    // the code still sitting in a tab they had closed.
+    const PENDING_KEY = 'emode_pending_appsumo_code';
 
     const loadStatus = async () => {
         const { data: { session } } = await supabase.auth.getSession();
         setSignedIn(Boolean(session));
         if (!session) return;
+
+        // Signed in now, so anything they typed before is theirs to redeem.
+        try {
+            const pending = localStorage.getItem(PENDING_KEY);
+            if (pending) {
+                localStorage.removeItem(PENDING_KEY);
+                setCode(pending);
+            }
+        } catch { /* private browsing: they retype it, which is the old behaviour */ }
 
         const res = await fetch('/api/redeem', {
             headers: { Authorization: `Bearer ${session.access_token}` },
@@ -50,6 +71,42 @@ export default function RedeemPage() {
         const { data: listener } = supabase.auth.onAuthStateChange(() => loadStatus());
         return () => listener.subscription.unsubscribe();
     }, []);
+
+    /**
+     * Sign in without leaving.
+     *
+     * The old card linked to /login, and /auth/callback sends people to
+     * /auth/home afterwards, so a buyer mid-redemption was deposited on a
+     * dashboard with nothing on screen about the code they came to use. The
+     * Supabase redirect URL cannot carry ?next= either: it is matched against
+     * the allowlist literally, and a query string makes it fall through to the
+     * site root.
+     *
+     * So do not navigate at all. This page already listens for auth changes, so
+     * the buyer stays here, clicks the link in another tab, and this tab wakes
+     * up holding the code they already pasted.
+     */
+    const sendLink = async (e: React.FormEvent) => {
+        e.preventDefault();
+        setSending(true);
+        setError(null);
+        try {
+            // Hold the code now: the link may well be opened in another browser,
+            // and this tab is the one that has it.
+            try { if (code.trim()) localStorage.setItem(PENDING_KEY, code.trim()); } catch { /* ignore */ }
+
+            const { error: signInError } = await supabase.auth.signInWithOtp({
+                email,
+                options: { emailRedirectTo: `${window.location.origin}/auth/callback` },
+            });
+            if (signInError) throw signInError;
+            setLinkSent(true);
+        } catch (err: any) {
+            setError(err.message || 'Could not send that link.');
+        } finally {
+            setSending(false);
+        }
+    };
 
     const redeem = async (e: React.FormEvent) => {
         e.preventDefault();
@@ -75,6 +132,7 @@ export default function RedeemPage() {
             setCodeCount(data.codeCount);
             setPlanName(data.planName);
             setCode('');
+            try { localStorage.removeItem(PENDING_KEY); } catch { /* ignore */ }
             setJustRedeemed(true);
         } catch (err: any) {
             setError(err.message);
@@ -104,17 +162,73 @@ export default function RedeemPage() {
 
                 {signedIn === false && (
                     <div className="p-8 bg-white rounded-2xl border border-black/5 shadow-sm mb-8">
-                        <h2 className="font-bold mb-2">Sign in first</h2>
-                        <p className="text-sm text-charcoal/50 mb-6 leading-relaxed">
-                            Your code has to attach to an account. Use the same email you bought
-                            with on AppSumo if you can — it keeps everything in one place.
-                        </p>
-                        <Link
-                            href="/login"
-                            className="inline-flex items-center gap-2 px-6 py-3 bg-obsidian text-white rounded-xl text-xs font-bold uppercase tracking-widest hover:bg-black transition-colors"
-                        >
-                            Sign in <ArrowRight className="w-4 h-4" />
-                        </Link>
+                        {linkSent ? (
+                            <>
+                                <h2 className="font-bold mb-2">Check your email</h2>
+                                <p className="text-sm text-charcoal/50 leading-relaxed">
+                                    We sent a sign-in link to <b>{email}</b>. Leave this tab open.
+                                    Your code is saved here and will be waiting when you come back.
+                                </p>
+                            </>
+                        ) : (
+                            <>
+                                <h2 className="font-bold mb-2">Paste your code, then sign in</h2>
+                                <p className="text-sm text-charcoal/50 mb-6 leading-relaxed">
+                                    Your code has to attach to an account, and we will make one for
+                                    you. Use the email you bought with on AppSumo if you can, it
+                                    keeps everything in one place.
+                                </p>
+
+                                <label className="block text-xs font-bold uppercase tracking-widest text-charcoal/40 mb-3">
+                                    Your code
+                                </label>
+                                <input
+                                    value={code}
+                                    onChange={(e) => {
+                                        setCode(e.target.value);
+                                        try { localStorage.setItem(PENDING_KEY, e.target.value); } catch { /* ignore */ }
+                                    }}
+                                    onBlur={() => code && setCode(formatCode(normaliseCode(code)))}
+                                    placeholder="EMODE-XXXX-XXXX-XXXX"
+                                    aria-label="AppSumo code"
+                                    autoComplete="off"
+                                    spellCheck={false}
+                                    className="w-full bg-off-white border border-black/10 rounded-xl py-4 px-5 font-mono tracking-wider uppercase focus:outline-none focus:border-accent-gold transition-colors mb-5"
+                                />
+
+                                <form onSubmit={sendLink}>
+                                    <label className="block text-xs font-bold uppercase tracking-widest text-charcoal/40 mb-3">
+                                        Your email
+                                    </label>
+                                    <div className="flex flex-col sm:flex-row gap-3">
+                                        <input
+                                            type="email"
+                                            required
+                                            value={email}
+                                            onChange={(e) => setEmail(e.target.value)}
+                                            placeholder="you@yourbrand.com"
+                                            aria-label="Email address"
+                                            autoComplete="email"
+                                            className="flex-1 bg-off-white border border-black/10 rounded-xl py-4 px-5 focus:outline-none focus:border-accent-gold transition-colors"
+                                        />
+                                        <button
+                                            type="submit"
+                                            disabled={sending || !email.trim()}
+                                            className="px-8 py-4 bg-obsidian text-white rounded-xl text-xs font-bold uppercase tracking-widest hover:bg-black transition-colors disabled:opacity-40 whitespace-nowrap"
+                                        >
+                                            {sending ? 'Sending' : 'Send sign-in link'}
+                                        </button>
+                                    </div>
+                                </form>
+
+                                {error && <p className="text-sm text-red-600 mt-3">{error}</p>}
+
+                                <p className="text-xs text-charcoal/40 mt-5">
+                                    Already have an account?{' '}
+                                    <Link href="/login" className="underline">Sign in another way</Link>
+                                </p>
+                            </>
+                        )}
                     </div>
                 )}
 
@@ -144,7 +258,10 @@ export default function RedeemPage() {
                             <div className="flex flex-col sm:flex-row gap-3">
                                 <input
                                     value={code}
-                                    onChange={(e) => setCode(e.target.value)}
+                                    onChange={(e) => {
+                                        setCode(e.target.value);
+                                        try { localStorage.setItem(PENDING_KEY, e.target.value); } catch { /* ignore */ }
+                                    }}
                                     onBlur={() => code && setCode(formatCode(normaliseCode(code)))}
                                     placeholder="EMODE-XXXX-XXXX-XXXX"
                                     aria-label="AppSumo code"

@@ -10,13 +10,39 @@ import { createSupabaseServerClient } from '../../../lib/supabase/server';
  * saw no `code`, silently established nothing, and bounced the user to a page
  * that still considered them signed out.
  */
+/**
+ * Where to send someone after they sign in, without letting a link decide.
+ *
+ * `new URL(next, origin)` resolves an absolute URL to itself, so ?next=https://
+ * evil.example sent a freshly signed-in user straight there, carrying the trust
+ * of having just arrived from an emode email. That is a credible phishing setup
+ * and the link can be posted anywhere.
+ *
+ * Checking the string with a regex is not enough. A leading-slash test accepts
+ * "/\evil.example", and the URL parser normalises the backslash to a slash and
+ * resolves it protocol-relative to https://evil.example. So the only reliable
+ * test is to resolve it with the same parser the redirect will use and compare
+ * origins, then keep nothing but the path.
+ */
+function safeNext(raw: string | null, origin: string): string {
+    const fallback = '/auth/home';
+    if (!raw) return fallback;
+    try {
+        const target = new URL(raw, origin);
+        if (target.origin !== origin) return fallback;
+        return `${target.pathname}${target.search}${target.hash}`;
+    } catch {
+        return fallback;
+    }
+}
+
 export async function GET(request: Request) {
     const requestUrl = new URL(request.url);
     const code = requestUrl.searchParams.get('code');
     const tokenHash = requestUrl.searchParams.get('token_hash');
     const otpType = requestUrl.searchParams.get('type');
     // Not '/admin': that assumes every account is a brand. /auth/home resolves it.
-    const next = requestUrl.searchParams.get('next') || '/auth/home';
+    const next = safeNext(requestUrl.searchParams.get('next'), requestUrl.origin);
 
     // Supabase reports link problems (expired, already used) here rather than
     // by omitting the code, so surface them instead of failing silently.
