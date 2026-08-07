@@ -23,6 +23,16 @@ interface DressingItem {
      * why the buy path skips rather than fails on items that lack it.
      */
     variantId?: string;
+    /**
+     * The merchant's own product id (Shopify's product.id), when known.
+     *
+     * Without it the server cannot tell that this garment is a product it
+     * already has: productKey() falls through to a slugified title, and the
+     * try-on is credited to a brand new row. That is how one jacket became two
+     * products, with the four try-ons on one and the outfit's one try-on on the
+     * other, on a dashboard whose whole job is counting them.
+     */
+    platformProductId?: string;
 }
 
 /* ------------------------------------------------------------------ *
@@ -462,6 +472,11 @@ export function ModalContent({ initialProduct, onClose }: ModalContentProps) {
                     // from — the dressing room exists to combine pieces, so
                     // crediting one of them makes the rest look untouched.
                     items: selectedItems.map((i) => ({
+                        // platformRef first: it is the only field that matches a
+                        // garment to a product row the merchant already has.
+                        // Without it the server slugifies the title and creates a
+                        // duplicate, splitting the try-on count across two rows.
+                        platformRef: i.platformProductId,
                         title: i.title,
                         image: i.image,
                         price: i.price,
@@ -523,6 +538,7 @@ export function ModalContent({ initialProduct, onClose }: ModalContentProps) {
                 ...product,
                 url: searchParams.get('url') || undefined,
                 variantId: variantId || undefined,
+                platformProductId: platformProductId || undefined,
                 id: crypto.randomUUID(),
             }];
         });
