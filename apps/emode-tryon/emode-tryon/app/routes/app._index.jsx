@@ -112,7 +112,25 @@ async function themeBlockInstalled(admin) {
 
     let template;
     try {
-      template = JSON.parse(content);
+      // Shopify prepends a /* ... */ banner to generated JSON templates:
+      //
+      //   /*
+      //    * IMPORTANT: The contents of this file are auto-generated.
+      //    */
+      //   { "sections": { ... } }
+      //
+      // That is not valid JSON, so JSON.parse threw, the catch skipped the file,
+      // and the function reported "not installed" for a theme that had the block
+      // in it. Merchants who had done everything right were told to do it again,
+      // and the deep link happily added a second copy of the block when they did.
+      //
+      // Slicing from the first brace is enough and is safer than stripping
+      // comments generally: block types are strings like
+      // "shopify://apps/.../blocks/..." which contain //, so anything that
+      // treats those as line comments corrupts the document it is trying to read.
+      const firstBrace = content.indexOf("{");
+      if (firstBrace < 0) continue;
+      template = JSON.parse(content.slice(firstBrace));
     } catch {
       continue;
     }
@@ -526,6 +544,16 @@ export const loader = async ({ request }) => {
  *
  * api_key is the app's client_id; the handle is the Liquid filename.
  */
+/**
+ * Plain theme editor, for when the block is already in place.
+ *
+ * addAppBlockId ADDS a block every time it is followed — it has no notion of
+ * "already there". So the success banner must not use it, or a merchant who
+ * clicks "Open Theme Editor" to nudge the button's alignment ends up with two
+ * sets of try-on buttons on the product page.
+ */
+const THEME_EDITOR_LINK = "shopify:admin/themes/current/editor?template=product";
+
 const THEME_DEEP_LINK =
   "shopify:admin/themes/current/editor" +
   "?template=product" +
@@ -856,8 +884,10 @@ export default function Index() {
                   The <b>emodeAI Buttons</b> block is in your published theme&apos;s
                   product template. Use the Theme Editor to move or restyle it.
                 </p>
+                {/* THEME_EDITOR_LINK, not THEME_DEEP_LINK: the block is already
+                    there, and the deep link would add a second one. */}
                 <Box paddingBlockStart="200">
-                  <Button url={THEME_DEEP_LINK} target="_blank">
+                  <Button url={THEME_EDITOR_LINK} target="_blank">
                     Open Theme Editor
                   </Button>
                 </Box>
