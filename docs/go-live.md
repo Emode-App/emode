@@ -28,7 +28,19 @@ it first looks.
 **No Stripe Price IDs to recreate.** Checkout builds line items from inline
 `price_data` using `priceInCents` from `lib/stripe-plan-config.ts`, so there is
 no product catalogue in Stripe to rebuild in live mode. This is usually the
-tedious half of a live switch and it does not apply here.
+tedious half of a live switch and it does not apply here. An empty Product
+catalog in the Stripe dashboard is the correct state, not a missing step —
+anything created there by hand is inert, because nothing in the code looks it
+up. Prices change in `stripe-plan-config.ts` and ship with a deploy.
+
+**The publishable key is not used.** There is no client-side Stripe anywhere:
+no `loadStripe`, no `@stripe/stripe-js`. `/api/stripe/checkout` creates the
+session server-side and returns `session.url` for the browser to follow, so
+`pk_live_` is irrelevant to this app. Only the two secrets below matter.
+
+**Expect to issue a fresh secret key.** Stripe shows a secret key once and
+never again. Since no live key has ever been deployed, rolling one breaks
+nothing — there is nothing in production using it yet.
 
 ---
 
