@@ -138,11 +138,15 @@ export default function OnboardingPage() {
         loadMerchant();
     }, []);
 
-    // Plain /login on purpose. The login page ignores ?next= — every path there
-    // hardcodes /auth/home, deliberately, because Google's redirect allowlist
-    // does not match query strings. So the receipt travels in localStorage
-    // instead, and NoMerchantYet redeems it wherever the buyer lands.
-    const loginHref = '/login';
+    // ?mode=signup, not plain /login: this button says "create your account",
+    // and landing someone on a Sign In form with a small "Create one" link
+    // underneath makes them do the step twice.
+    //
+    // No ?next=, deliberately. The login page ignores it — every path there
+    // hardcodes /auth/home, because Google's redirect allowlist does not match
+    // query strings. The receipt travels in localStorage instead, and
+    // NoMerchantYet redeems it wherever the buyer actually lands.
+    const loginHref = '/login?mode=signup';
 
     const handleSaveBrand = async () => {
         if (!merchantId || !brandName.trim()) return;

@@ -93,9 +93,23 @@ export default function LoginPage() {
     // directly rather than via useSearchParams, which would force this
     // otherwise-static page into a Suspense boundary.
     useEffect(() => {
-        const err = new URLSearchParams(window.location.search).get('error');
+        const params = new URLSearchParams(window.location.search);
+
+        // ?mode=signup lands straight on Create Account. Every link meaning
+        // "make an account" used to drop people on the Sign In form, where the
+        // way forward was a small "Create one" underneath — a step that reads
+        // as being in the wrong place and costs signups. Same URL-reading
+        // approach as below, and for the same reason: useSearchParams would
+        // force this otherwise-static page into a Suspense boundary.
+        if (params.get('mode') === 'signup') setMode('signup');
+
+        // /auth/callback redirects back here with ?error=... when a magic link
+        // is expired, already used, or arrives without a code.
+        const err = params.get('error');
         if (err) {
             setMessage({ type: 'error', text: humanizeAuthError(err) });
+        }
+        if (err || params.get('mode')) {
             window.history.replaceState({}, '', window.location.pathname);
         }
     }, []);
@@ -203,6 +217,16 @@ export default function LoginPage() {
             window.location.replace('/auth/home');
         } catch (error: any) {
             const raw = error?.message || '';
+            const status = Number(error?.status ?? 0);
+
+            // A signup that cannot send its confirmation email fails with a 500
+            // and an empty body, which arrives here as the literal string "{}"
+            // and was rendered to the user exactly like that. Whatever else is
+            // true, "{}" is never something a person should be shown, and the
+            // failure is ours rather than anything they typed — so name it and
+            // point at the door that does not depend on email.
+            const serverSideBlank = status >= 500 || /^\s*\{\s*\}\s*$/.test(raw) || !raw.trim();
+
             setMessage({
                 type: 'error',
                 text:
@@ -214,7 +238,11 @@ export default function LoginPage() {
                         ? 'That email and password did not match. If you have only ever signed in by link, use "Email me a link" below and set a password afterwards.'
                         : /pwned|leaked|compromise/i.test(raw)
                         ? 'That password has appeared in a known data breach. Pick a different one.'
-                        : raw || 'Could not sign in.',
+                        : serverSideBlank
+                        ? (mode === 'signup'
+                            ? 'We could not send your confirmation email just now. This is on our side, not yours. Use "Continue with Google" above, which does not need email, or try again shortly.'
+                            : 'Something went wrong on our side. Try again shortly, or use "Continue with Google" above.')
+                        : raw,
             });
         } finally {
             setLoading(false);
