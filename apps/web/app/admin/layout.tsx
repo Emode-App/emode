@@ -44,10 +44,10 @@ export default async function AdminLayout({
                     <span className="text-[10px] uppercase tracking-[0.25em] text-white/40">Admin</span>
                 </div>
                 <nav className="flex flex-col gap-2">
-                    <AdminNav />
+                    <AdminNav signedIn={Boolean(user)} />
 
                     <div className="mt-8 pt-8 border-t border-white/10">
-                        <AdminSettingsLink />
+                        <AdminSettingsLink signedIn={Boolean(user)} />
                         {user ? (
                             <>
                                 <div className="mt-2 px-4 py-2 text-xs text-white/40 truncate">

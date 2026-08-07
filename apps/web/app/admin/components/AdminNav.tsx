@@ -44,7 +44,21 @@ function NavLink({ href, label, icon: Icon, exact }: typeof LINKS[number]) {
     );
 }
 
-export function AdminNav() {
+/**
+ * `signedIn` is not decoration.
+ *
+ * /admin/onboarding is the one route under /admin that renders without a
+ * session, because a buyer arrives there straight from checkout and does not
+ * have an account yet. The sidebar rendered its full set of links anyway, so
+ * that buyer was shown Overview, Products, Studio, Analytics and Settings —
+ * every one of which bounces to /login, since the layout guard exempts only
+ * onboarding.
+ *
+ * Six doors, all locked, offered to someone who has just paid. Showing nothing
+ * is better than showing a menu that punishes anyone who uses it.
+ */
+export function AdminNav({ signedIn = true }: { signedIn?: boolean }) {
+    if (!signedIn) return null;
     return (
         <>
             {LINKS.map((link) => (
@@ -54,6 +68,7 @@ export function AdminNav() {
     );
 }
 
-export function AdminSettingsLink() {
+export function AdminSettingsLink({ signedIn = true }: { signedIn?: boolean }) {
+    if (!signedIn) return null;
     return <NavLink {...SETTINGS} />;
 }

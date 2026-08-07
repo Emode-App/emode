@@ -327,19 +327,35 @@ export default function OnboardingPage() {
                 </div>
             </div>
 
+            {/* Both of these used to point into the admin unconditionally. A
+                buyer without an account is bounced to /login by the layout
+                guard, so the biggest button on the page — pressed moments after
+                paying — threw them at a sign-in form with no explanation. Offer
+                the step that actually exists for them instead. */}
             <div className="flex gap-4">
-                <Link
-                    href="/admin"
-                    className="btn-generate px-8 py-4 text-sm font-bold uppercase tracking-widest inline-flex items-center gap-3"
-                >
-                    Go to Dashboard <ArrowRight className="w-4 h-4" />
-                </Link>
-                <Link
-                    href="/admin/install"
-                    className="px-8 py-4 bg-white border border-black/10 rounded-xl text-sm font-bold uppercase tracking-widest hover:bg-black/5 transition-colors"
-                >
-                    View Later
-                </Link>
+                {signedIn ? (
+                    <>
+                        <Link
+                            href="/admin"
+                            className="btn-generate px-8 py-4 text-sm font-bold uppercase tracking-widest inline-flex items-center gap-3"
+                        >
+                            Go to Dashboard <ArrowRight className="w-4 h-4" />
+                        </Link>
+                        <Link
+                            href="/admin/install"
+                            className="px-8 py-4 bg-white border border-black/10 rounded-xl text-sm font-bold uppercase tracking-widest hover:bg-black/5 transition-colors"
+                        >
+                            View Later
+                        </Link>
+                    </>
+                ) : (
+                    <Link
+                        href={loginHref}
+                        className="btn-generate px-8 py-4 text-sm font-bold uppercase tracking-widest inline-flex items-center gap-3"
+                    >
+                        Create your account <ArrowRight className="w-4 h-4" />
+                    </Link>
+                )}
             </div>
         </div>
     );
