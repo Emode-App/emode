@@ -121,6 +121,13 @@ class AIEngine {
 
             const category = request.category || 'clothing items';
 
+            // On mirroring: image models treat a horizontal flip as the same
+            // image, because flipping is a standard training augmentation. So an
+            // asymmetric garment comes back reversed, and nothing about the
+            // result looks broken enough to notice — until the garment is one
+            // denim leg and one leather leg, and the shopper is comparing it to
+            // the product page. Symmetric clothing hid this completely.
+            //
             // On closures: left to itself the model styles the shot — it hangs a
             // jacket open over an invented tee, because that is what product
             // photography looks like. That is wrong twice over. It shows the
@@ -145,6 +152,8 @@ class AIEngine {
                 Fidelity to the garment — this is what the shopper is judging:
                 - Reproduce each product exactly as pictured: colour, material, pattern, hardware, proportions and length.
                 - Reproduce its closure exactly as pictured. If the product image shows it zipped, buttoned, or fastened, it stays that way on the person. Never unzip, unbutton, or open a garment to make the shot look styled.
+                - Never mirror the garment. If a detail sits on one side of the product image, it sits on that same side of the person as the viewer sees it. This applies to contrast panels, a single differently coloured leg or sleeve, stripes, slits, zips, logos, pockets and any print placed off centre. A mirrored garment is a different garment to the shopper looking at the product page.
+                - Where a garment changes material or colour partway along, keep the transition at the same point on the body as in the product image, at the same angle, with the same edge. A raw or frayed edge stays raw and frayed.
                 - Do not add any garment, layer or accessory that was not provided as a product input.
 
                 Layers that were not part of this try-on:

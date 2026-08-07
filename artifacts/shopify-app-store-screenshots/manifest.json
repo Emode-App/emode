@@ -1,0 +1,47 @@
+{
+  "generatedAt": "2026-08-07T02:58:41.543Z",
+  "spec": {
+    "width": 1600,
+    "height": 900,
+    "aspectRatio": "16:9",
+    "format": "PNG"
+  },
+  "notes": [
+    "Designed as Shopify App Store desktop screenshots.",
+    "No browser chrome, desktop wallpaper, pricing, reviews, or outcome guarantees are included.",
+    "Screenshots are unique and centered on actual emode UI/features found in the codebase.",
+    "Try-on modal screenshots include generated try-on renders saved under tryon-renders."
+  ],
+  "screenshots": [
+    {
+      "file": "01-admin-installation.png",
+      "title": "Launch virtual try-on from your store admin",
+      "alt": "Emode installation dashboard with connected status and setup steps"
+    },
+    {
+      "file": "02-storefront-buttons.png",
+      "title": "Add try-on buttons to product pages",
+      "alt": "Storefront product page showing Try This On and Dressing Room buttons"
+    },
+    {
+      "file": "03-tryon-modal.png",
+      "title": "Let shoppers generate looks in a focused modal",
+      "alt": "Emode try-on modal with photo upload, product preview, and action buttons"
+    },
+    {
+      "file": "04-dressing-room.png",
+      "title": "Build outfits in the dressing room",
+      "alt": "Dressing room grid with selected products ready to try together"
+    },
+    {
+      "file": "05-analytics-funnel.png",
+      "title": "Measure try-on intent by product",
+      "alt": "Analytics dashboard with views, try-ons, dressing room adds, and product table"
+    },
+    {
+      "file": "06-product-catalog.png",
+      "title": "Keep your catalog and widget install in one place",
+      "alt": "Product catalog dashboard with item status and widget install code"
+    }
+  ]
+}
