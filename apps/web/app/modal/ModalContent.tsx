@@ -598,7 +598,7 @@ export function ModalContent({ initialProduct, onClose }: ModalContentProps) {
         // eslint-disable-next-line react-hooks/exhaustive-deps
     }, [hydrated]);
 
-    const handleAddToCart = () => {
+    const handleAddToCart = (forItems?: DressingItem[]) => {
         const inIframe = window.parent !== window;
         if (inIframe) {
             /**
@@ -614,7 +614,7 @@ export function ModalContent({ initialProduct, onClose }: ModalContentProps) {
              * skipped rather than failing the whole cart: better to add what can
              * be added than to reject a look for one foreign garment.
              */
-            const chosen = selectedItems.length ? selectedItems : [];
+            const chosen = forItems ?? (selectedItems.length ? selectedItems : []);
             const variantIds = chosen
                 .map((i) => i.variantId)
                 .filter((v): v is string => Boolean(v));
@@ -881,7 +881,7 @@ export function ModalContent({ initialProduct, onClose }: ModalContentProps) {
                                     <Plus className="w-4 h-4" /> Add to Dressing Room
                                 </button>
                                 <button
-                                    onClick={handleAddToCart}
+                                    onClick={() => handleAddToCart()}
                                     className="bg-obsidian text-white py-5 flex items-center justify-center gap-3 font-bold tracking-widest uppercase text-sm rounded-md hover:bg-black transition-all"
                                 >
                                     <ShoppingCart className="w-4 h-4" /> {result ? 'Purchase Look' : 'Add to Cart'}
@@ -937,7 +937,17 @@ export function ModalContent({ initialProduct, onClose }: ModalContentProps) {
                                                 : 'Try Together'}
                                         </button>
                                     )}
-                                    <button className="px-6 py-3 bg-obsidian text-white rounded-full font-bold text-xs tracking-widest uppercase hover:bg-black transition-all">
+                                    {/* This had no onClick at all — a button that
+                                        looked like the primary action and did
+                                        nothing when pressed. "All" means every
+                                        item in the room, not just the selected
+                                        ones, which is what separates it from
+                                        Purchase Look. */}
+                                    <button
+                                        onClick={() => handleAddToCart(dressingRoomItems)}
+                                        disabled={dressingRoomItems.length === 0}
+                                        className="px-6 py-3 bg-obsidian text-white rounded-full font-bold text-xs tracking-widest uppercase hover:bg-black transition-all disabled:opacity-40"
+                                    >
                                         Checkout All
                                     </button>
                                 </div>

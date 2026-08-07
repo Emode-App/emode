@@ -483,42 +483,23 @@
        * not. Where the runtime is missing, going to the cart is the honest
        * fallback — they pressed a button called Purchase Look.
        */
-      function revealCart(cartWasRefreshed) {
-        var actions = window.Shopify.actions;
-
-        // openCart only OPENS the drawer — it does not re-render it. After a
-        // raw cart/add.js the drawer is still whatever the theme rendered at
-        // page load, so it slides out saying "Your cart is empty" over a cart
-        // that now has two items in it. That is worse than showing nothing: it
-        // states the opposite of the truth.
-        //
-        // So the drawer is only used when updateCart refreshed it for us.
-        // Otherwise a real navigation to the cart page, which cannot be stale.
-        if (cartWasRefreshed && actions && typeof actions.openCart === 'function') {
-          try { actions.openCart(); return; } catch (err) { /* fall through */ }
-        }
-        window.location.href = root + 'cart';
-      }
-
-      var actions = window.Shopify.actions;
-      if (actions && typeof actions.updateCart === 'function') {
-        // Preferred path: the theme (or Shopify's default implementation)
-        // refreshes its own cart UI, and the matching standard events are
-        // emitted for us.
-        actions.updateCart({
-          lines: cartItems.map(function (it) {
-            return { merchandiseId: it.id, quantity: it.quantity };
-          })
-        }).then(function () {
-          console.log('[emodeAI] Added to cart:', cartItems);
-          closeEmodeModal();
-          revealCart(true); // updateCart refreshed the cart in place
-        }).catch(function (err) {
-          console.error('[emodeAI] Add to cart failed:', err, 'sent:', cartItems);
-        });
-        return;
-      }
-
+      /**
+       * One path, and it is the one that is known to work.
+       *
+       * This briefly preferred Shopify.actions.updateCart, on the reasoning that
+       * the theme would then refresh its own cart UI. Two problems. updateCart
+       * takes a Storefront API merchandiseId — a gid://shopify/ProductVariant/…
+       * string — and it was being handed the bare numeric id that cart/add.js
+       * wants, so it quietly did nothing. And because the call resolved, the
+       * drawer was then opened over a cart that had not changed, which is how a
+       * working add turned into "Your cart is empty".
+       *
+       * cart/add.js with numeric ids is proven: the console showed res.ok and
+       * both lines accepted. So that is what runs, and the cart page is what
+       * confirms it. A full navigation cannot render stale, which openCart
+       * demonstrably can — and the shopper pressed a button called Purchase
+       * Look, so the cart is where they were going anyway.
+       */
       fetch(root + 'cart/add.js', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -535,7 +516,7 @@
         }
         console.log('[emodeAI] Added to cart:', cartItems);
         closeEmodeModal();
-        revealCart(false); // raw add — the drawer still holds stale markup
+        window.location.href = root + 'cart';
       }).catch(function (err) {
         console.error('[emodeAI] Add to cart failed:', err, 'sent:', cartItems);
       });
