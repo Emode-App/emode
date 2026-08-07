@@ -5,6 +5,7 @@ import Link from 'next/link';
 import { Lock, ArrowRight } from 'lucide-react';
 import { supabase } from '../../../lib/supabase/browser';
 import { Logo } from '../../../components/Logo';
+import { checkPassword } from '../../../lib/password-breach';
 
 /**
  * Choose a password.
@@ -35,16 +36,17 @@ export default function SetPasswordPage() {
         e.preventDefault();
         setError(null);
 
-        if (password.length < 8) {
-            setError('Use at least 8 characters.');
-            return;
-        }
-        if (password !== confirm) {
-            setError('Those two passwords do not match.');
+        // Length, match, and a breach lookup. The breach call is a network
+        // round trip, so busy goes up first — otherwise the button sits dead
+        // for up to three seconds with no sign anything is happening.
+        setBusy(true);
+        const problem = await checkPassword(password, confirm);
+        if (problem) {
+            setError(problem);
+            setBusy(false);
             return;
         }
 
-        setBusy(true);
         try {
             const { error: updateError } = await supabase.auth.updateUser({ password });
             if (updateError) throw updateError;

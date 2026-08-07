@@ -3,6 +3,7 @@
 import { useEffect, useState } from 'react';
 import { Lock, Check } from 'lucide-react';
 import { supabase } from '../../../lib/supabase/browser';
+import { checkPassword } from '../../../lib/password-breach';
 
 /**
  * Change your password, from inside the app.
@@ -43,20 +44,21 @@ export function ChangePassword() {
         e.preventDefault();
         setError(null);
 
-        if (next.length < 8) {
-            setError('Use at least 8 characters.');
-            return;
-        }
-        if (next !== confirm) {
-            setError('Those two passwords do not match.');
-            return;
-        }
         if (!email) {
             setError('Could not read your account. Reload and try again.');
             return;
         }
 
+        // Length, match, and a breach lookup, from the same helper the reset
+        // page uses so the two cannot disagree about what is acceptable.
         setBusy(true);
+        const problem = await checkPassword(next, confirm);
+        if (problem) {
+            setError(problem);
+            setBusy(false);
+            return;
+        }
+
         try {
             // Proof of the current password. Signing in again returns a session
             // for the same user, so this costs nothing beyond the round trip.

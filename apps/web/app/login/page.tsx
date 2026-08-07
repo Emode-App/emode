@@ -2,6 +2,7 @@
 
 import { useState, useEffect } from 'react';
 import { supabase } from '../../lib/supabase/browser';
+import { checkPassword } from '../../lib/password-breach';
 import { Mail, Lock, ArrowRight } from 'lucide-react';
 import Link from 'next/link';
 import { Logo } from '../../components/Logo';
@@ -172,6 +173,18 @@ export default function LoginPage() {
 
         try {
             if (mode === 'signup') {
+                // Only on signup. Sign-in must never run this: it would tell an
+                // attacker holding a password whether it is breached, and it
+                // would lock out an existing user whose password turns up in a
+                // corpus later — punishing them at the one moment they are
+                // trying to get in, rather than when they can calmly change it.
+                // There is no confirm field here, so only the password is checked.
+                const problem = await checkPassword(password);
+                if (problem) {
+                    setMessage({ type: 'error', text: problem });
+                    return;
+                }
+
                 const { error } = await supabase.auth.signUp({
                     email,
                     password,
