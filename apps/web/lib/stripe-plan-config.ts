@@ -5,7 +5,17 @@ export const PLAN_CONFIG: Record<string, {
     priceInCents: number;
     mode: 'subscription' | 'payment';
     interval?: 'month';
+    /** Included in the price. The merchant never thinks about this number. */
     dailyLimit: number;
+    /**
+     * How far past the allowance this plan may run, billed per generation.
+     *
+     * Zero on lifetime and AppSumo tiers: there is no subscription to charge, so
+     * for those the allowance is the ceiling. That is also why none of them say
+     * "unlimited" any more — unlimited generation against a one-time payment is
+     * an unbounded liability that grows with the customer's success.
+     */
+    overageDaily: number;
     unlimited: boolean;
     marketplaceAccess: boolean;
     // 'merchant' plans (default) upsert a merchants row keyed by shop domain.
@@ -18,7 +28,8 @@ export const PLAN_CONFIG: Record<string, {
         priceInCents: 2900,
         mode: 'subscription',
         interval: 'month',
-        dailyLimit: 50,
+        dailyLimit: 500,
+        overageDaily: 500,
         unlimited: false,
         marketplaceAccess: false,
         subjectType: 'merchant',
@@ -28,7 +39,8 @@ export const PLAN_CONFIG: Record<string, {
         priceInCents: 7900,
         mode: 'subscription',
         interval: 'month',
-        dailyLimit: 200,
+        dailyLimit: 2000,
+        overageDaily: 2000,
         unlimited: false,
         marketplaceAccess: true,
         subjectType: 'merchant',
@@ -38,8 +50,9 @@ export const PLAN_CONFIG: Record<string, {
         priceInCents: 14900,
         mode: 'subscription',
         interval: 'month',
-        dailyLimit: 0,
-        unlimited: true,
+        dailyLimit: 5000,
+        overageDaily: 5000,
+        unlimited: false,
         marketplaceAccess: true,
         subjectType: 'merchant',
     },
@@ -47,7 +60,8 @@ export const PLAN_CONFIG: Record<string, {
         name: 'Lifetime Starter',
         priceInCents: 29900,
         mode: 'payment',
-        dailyLimit: 50,
+        dailyLimit: 500,
+        overageDaily: 0,
         unlimited: false,
         marketplaceAccess: false,
         subjectType: 'merchant',
@@ -56,7 +70,8 @@ export const PLAN_CONFIG: Record<string, {
         name: 'Lifetime Pro',
         priceInCents: 79900,
         mode: 'payment',
-        dailyLimit: 200,
+        dailyLimit: 2000,
+        overageDaily: 0,
         unlimited: false,
         marketplaceAccess: true,
         subjectType: 'merchant',
@@ -65,8 +80,9 @@ export const PLAN_CONFIG: Record<string, {
         name: 'Lifetime Founder',
         priceInCents: 149900,
         mode: 'payment',
-        dailyLimit: 0,
-        unlimited: true,
+        dailyLimit: 5000,
+        overageDaily: 0,
+        unlimited: false,
         marketplaceAccess: true,
         subjectType: 'merchant',
     },
@@ -75,8 +91,12 @@ export const PLAN_CONFIG: Record<string, {
         priceInCents: 500,
         mode: 'subscription',
         interval: 'month',
-        dailyLimit: 0,
-        unlimited: true,
+        // Fair use rather than literally boundless. Nobody tries on a hundred
+        // garments in a day, so this is invisible to a real shopper, and it
+        // stops one scripted account costing more than a $5 plan can carry.
+        dailyLimit: 100,
+        overageDaily: 100,
+        unlimited: false,
         marketplaceAccess: false,
         subjectType: 'user',
     },

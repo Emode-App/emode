@@ -90,6 +90,8 @@ type Resolution = {
     status?: number;
     subject?: Subject;
     limit: number;
+    /** How far past `limit` this plan may run, billed per generation. */
+    overage?: number;
     overMessage?: (used: number, limit: number) => string;
 };
 
@@ -101,7 +103,7 @@ async function resolveSubject(merchantId: string, userId: string | null): Promis
     if (merchantId) {
         const { data: entitlement } = await supabase
             .from('entitlements')
-            .select('daily_generation_limit, unlimited')
+            .select('daily_generation_limit, overage_daily, unlimited')
             .eq('subject_id', merchantId)
             .eq('subject_type', 'merchant')
             .order('created_at', { ascending: false })
@@ -115,8 +117,17 @@ async function resolveSubject(merchantId: string, userId: string | null): Promis
         return {
             subject: { type: 'merchant', id: merchantId },
             limit: entitlement.unlimited ? -1 : entitlement.daily_generation_limit,
-            overMessage: (used, limit) =>
-                `Daily limit reached (${used}/${limit}). Resets at midnight UTC.`,
+            overage: entitlement.overage_daily ?? 0,
+            // Deliberately says nothing about limits or plans.
+            //
+            // This text renders on the MERCHANT'S product page, to their
+            // customer. It used to read "Daily limit reached (50/50). Resets at
+            // midnight UTC", which tells a shopper that the shop they are buying
+            // from has run out of an allowance — an emode-branded failure on
+            // someone else's storefront, which they pay us for. The merchant
+            // hears about it through the dashboard and email instead.
+            overMessage: () =>
+                'Try-on is unavailable right now. Please try again a little later.',
         };
     }
 
@@ -124,7 +135,7 @@ async function resolveSubject(merchantId: string, userId: string | null): Promis
     if (userId) {
         const { data: entitlement } = await supabase
             .from('entitlements')
-            .select('daily_generation_limit, unlimited')
+            .select('daily_generation_limit, overage_daily, unlimited')
             .eq('subject_id', userId)
             .eq('subject_type', 'user')
             .order('created_at', { ascending: false })
@@ -135,6 +146,7 @@ async function resolveSubject(merchantId: string, userId: string | null): Promis
         return {
             subject: { type: 'user', id: userId },
             limit: entitlement?.unlimited ? -1 : (entitlement?.daily_generation_limit ?? FREE_TIER_DAILY_LIMIT),
+            overage: entitlement?.overage_daily ?? 0,
             overMessage: (used, limit) =>
                 `Daily limit reached (${used}/${limit}). Upgrade for unlimited generations, or wait until midnight UTC.`,
         };
@@ -144,22 +156,27 @@ async function resolveSubject(merchantId: string, userId: string | null): Promis
 }
 
 // Atomically reserve one generation against a subject's daily cap.
-async function consume(subject: Subject, limit: number): Promise<{ allowed: boolean; used: number }> {
+async function consume(
+    subject: Subject,
+    limit: number,
+    overage = 0
+): Promise<{ allowed: boolean; used: number; overage: number }> {
     const { data, error } = await supabase.rpc('consume_generation', {
         p_subject_type: subject.type,
         p_subject_id: subject.id,
         p_limit: limit,
+        p_overage: overage,
     });
 
     if (error) {
         // Fail closed: if we cannot account for the request we do not spend a
         // Gemini call on it.
         console.error('[API/Generate] consume_generation failed:', error);
-        return { allowed: false, used: 0 };
+        return { allowed: false, used: 0, overage: 0 };
     }
 
     const row = Array.isArray(data) ? data[0] : data;
-    return { allowed: !!row?.allowed, used: row?.used ?? 0 };
+    return { allowed: !!row?.allowed, used: row?.used ?? 0, overage: row?.overage ?? 0 };
 }
 
 // Map whatever product reference the caller sent onto our own products.id,
@@ -342,7 +359,15 @@ export async function POST(request: Request) {
 
         // ── 3. Reserve against their plan ──
         if (resolution.subject) {
-            const check = await consume(resolution.subject, resolution.limit);
+            const check = await consume(resolution.subject, resolution.limit, resolution.overage ?? 0);
+            if (check.overage > 0) {
+                // Past the included allowance and still serving. Logged so the
+                // billable figure is visible before anyone reads the table.
+                console.log(
+                    `[API/Generate] overage: ${resolution.subject.type}=${resolution.subject.id} ` +
+                    `used=${check.used} overage=${check.overage}`
+                );
+            }
             if (!check.allowed) {
                 await Promise.all(reserved.map(release));
                 return NextResponse.json(

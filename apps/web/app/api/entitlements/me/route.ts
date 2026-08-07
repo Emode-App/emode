@@ -36,7 +36,7 @@ export async function GET(request: Request) {
 
     const { data: entitlement } = await supabase
         .from('entitlements')
-        .select('plan, daily_generation_limit, unlimited')
+        .select('plan, daily_generation_limit, overage_daily, unlimited')
         .eq('subject_id', user.id)
         .eq('subject_type', 'user')
         .order('created_at', { ascending: false })

@@ -30,6 +30,9 @@ export function limitsForPlan(plan: AppSumoPlan) {
     const config = PLAN_CONFIG[plan];
     return {
         dailyLimit: config?.dailyLimit ?? 0,
+        // Always zero for AppSumo: a lifetime code has no subscription to bill
+        // overage against, so the included allowance is the ceiling.
+        overageDaily: 0,
         unlimited: config?.unlimited ?? false,
         marketplaceAccess: config?.marketplaceAccess ?? false,
         name: config?.name ?? plan,

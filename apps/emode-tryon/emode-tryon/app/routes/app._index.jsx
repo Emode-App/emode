@@ -307,18 +307,119 @@ export const loader = async ({ request }) => {
     hasTryOns = (genCount || 0) > 0;
   }
 
+  // ── The numbers the merchant actually installed this for ──
+  //
+  // This screen used to report installation state and then send people to
+  // another website to find out whether any of it was working. Everything below
+  // already existed in the database; none of it was on the page they land on.
+  let stats = null;
+  let usage = null;
+  let topProducts = [];
+
+  if (merchant?.id) {
+    const today = new Date().toISOString().slice(0, 10);
+
+    const [statsRes, usageRes, entRes] = await Promise.all([
+      supabase.rpc("merchant_tryon_stats", { p_merchant_id: merchant.id, p_days: 30 }),
+      supabase
+        .from("usage_counters")
+        .select("generations_used, overage_used")
+        .eq("subject_type", "merchant")
+        .eq("subject_id", merchant.id)
+        .eq("date", today)
+        .maybeSingle(),
+      supabase
+        .from("entitlements")
+        .select("daily_generation_limit, overage_daily")
+        .eq("subject_id", merchant.id)
+        .eq("subject_type", "merchant")
+        .order("created_at", { ascending: false })
+        .limit(1)
+        .maybeSingle(),
+    ]);
+
+    const row = Array.isArray(statsRes.data) ? statsRes.data[0] : statsRes.data;
+    if (row) {
+      const tryOn = Number(row.tryon_visitors) || 0;
+      const control = Number(row.control_visitors) || 0;
+      const tryOnConv = Number(row.tryon_conversions) || 0;
+      const controlConv = Number(row.control_conversions) || 0;
+
+      stats = {
+        tryOnVisitors: tryOn,
+        // Conversion among shoppers who tried on, against those who saw the
+        // button and did not. Without the second number the first means nothing.
+        tryOnRate: tryOn ? (tryOnConv / tryOn) * 100 : 0,
+        controlRate: control ? (controlConv / control) * 100 : 0,
+        revenue: Number(row.tryon_revenue) || 0,
+        avgOrderValue: Number(row.tryon_avg_order_value) || 0,
+        baselineOrderValue: Number(row.baseline_avg_order_value) || 0,
+        refunded: Number(row.tryon_orders_refunded) || 0,
+      };
+    }
+
+    const included = entRes.data?.daily_generation_limit ?? 0;
+    usage = {
+      used: usageRes.data?.generations_used ?? 0,
+      overage: usageRes.data?.overage_used ?? 0,
+      included,
+      ceiling: included + (entRes.data?.overage_daily ?? 0),
+    };
+
+    const { data: products } = await supabase
+      .from("products")
+      .select("id, title")
+      .eq("merchant_id", merchant.id)
+      .limit(50);
+
+    if (products?.length) {
+      const { data: byProduct } = await supabase
+        .from("generation_products")
+        .select("product_id")
+        .in("product_id", products.map((p) => p.id));
+
+      const counts = new Map();
+      for (const g of byProduct || []) {
+        counts.set(g.product_id, (counts.get(g.product_id) || 0) + 1);
+      }
+      topProducts = products
+        .map((p) => ({ title: p.title, tryOns: counts.get(p.id) || 0 }))
+        .filter((p) => p.tryOns > 0)
+        .sort((a, b) => b.tryOns - a.tryOns)
+        .slice(0, 5);
+    }
+  }
+
   return {
     merchant,
     activePlan,
     productCount,
     hasTryOns,
+    stats,
+    usage,
+    topProducts,
     // Shown so the merchant knows which email opens their emode dashboard.
     ownerLinked: Boolean(merchant?.owner_user_id),
   };
 };
 
 export default function Index() {
-  const { merchant, activePlan, productCount, ownerLinked, hasTryOns } = useLoaderData();
+  const { merchant, activePlan, productCount, ownerLinked, hasTryOns, stats, usage, topProducts } =
+    useLoaderData();
+
+  const money = (n) =>
+    new Intl.NumberFormat("en-US", { style: "currency", currency: "USD", maximumFractionDigits: 0 })
+      .format(n || 0);
+  const pct = (n) => `${(n || 0).toFixed(1)}%`;
+
+  // The lift is the whole claim: shoppers who tried on, against shoppers who saw
+  // the button and did not. Shown only once both sides have enough traffic to
+  // mean anything, because a lift computed from four visitors is noise wearing a
+  // number's clothes.
+  const hasSignal = stats && stats.tryOnVisitors >= 20;
+  const lift = hasSignal && stats.controlRate > 0
+    ? ((stats.tryOnRate - stats.controlRate) / stats.controlRate) * 100
+    : null;
 
   return (
     <Page>
@@ -346,16 +447,114 @@ export default function Index() {
                 {ownerLinked && (
                   <Box paddingBlockStart="200">
                     <Text variant="bodyMd" as="p" tone="subdued">
-                      Full try-on analytics live in your emode dashboard. Sign in
-                      at <b>emode.style/login</b> with this store&apos;s contact email —
-                      we&apos;ve already created the account, and it signs in by
-                      magic link, so there&apos;s no password to set.
+                      Deeper analytics, the marketplace and Studio live at{" "}
+                      <b>emode.style/login</b>. Sign in with this store&apos;s contact
+                      email — the account already exists and uses a magic link, so
+                      there&apos;s no password to set.
                     </Text>
                   </Box>
                 )}
               </BlockStack>
             </Card>
           </Layout.Section>
+
+          <Layout.Section>
+            <Card>
+              <BlockStack gap="400">
+                <InlineStack align="space-between" blockAlign="center">
+                  <Text as="h2" variant="headingMd">Last 30 days</Text>
+                  {stats && !hasSignal && (
+                    <Badge>Gathering data</Badge>
+                  )}
+                </InlineStack>
+
+                {!stats || stats.tryOnVisitors === 0 ? (
+                  <Text variant="bodyMd" as="p" tone="subdued">
+                    No try-ons yet. Once shoppers start using the button, this fills
+                    in with how many tried something on, whether they bought more
+                    often than shoppers who didn&apos;t, and what that was worth.
+                  </Text>
+                ) : (
+                  <BlockStack gap="400">
+                    <InlineStack gap="800" wrap>
+                      <BlockStack gap="100">
+                        <Text variant="bodySm" as="p" tone="subdued">Shoppers who tried on</Text>
+                        <Text variant="heading2xl" as="p">{stats.tryOnVisitors.toLocaleString()}</Text>
+                      </BlockStack>
+
+                      <BlockStack gap="100">
+                        <Text variant="bodySm" as="p" tone="subdued">Attributed revenue</Text>
+                        <Text variant="heading2xl" as="p">{money(stats.revenue)}</Text>
+                      </BlockStack>
+
+                      <BlockStack gap="100">
+                        <Text variant="bodySm" as="p" tone="subdued">Average order value</Text>
+                        <Text variant="heading2xl" as="p">{money(stats.avgOrderValue)}</Text>
+                        {stats.baselineOrderValue > 0 && (
+                          <Text variant="bodySm" as="p" tone="subdued">
+                            {money(stats.baselineOrderValue)} without try-on
+                          </Text>
+                        )}
+                      </BlockStack>
+                    </InlineStack>
+
+                    <Box borderColor="border" borderBlockStartWidth="025" paddingBlockStart="400">
+                      {hasSignal ? (
+                        <InlineStack gap="800" wrap>
+                          <BlockStack gap="100">
+                            <Text variant="bodySm" as="p" tone="subdued">Tried on, then bought</Text>
+                            <Text variant="headingLg" as="p">{pct(stats.tryOnRate)}</Text>
+                          </BlockStack>
+                          <BlockStack gap="100">
+                            <Text variant="bodySm" as="p" tone="subdued">Saw the button, didn&apos;t use it</Text>
+                            <Text variant="headingLg" as="p">{pct(stats.controlRate)}</Text>
+                          </BlockStack>
+                          {lift !== null && (
+                            <BlockStack gap="100">
+                              <Text variant="bodySm" as="p" tone="subdued">Difference</Text>
+                              <Text variant="headingLg" as="p" tone={lift >= 0 ? "success" : "critical"}>
+                                {lift >= 0 ? "+" : ""}{lift.toFixed(0)}%
+                              </Text>
+                            </BlockStack>
+                          )}
+                        </InlineStack>
+                      ) : (
+                        <Text variant="bodyMd" as="p" tone="subdued">
+                          Conversion needs about 20 try-on shoppers before the
+                          comparison means anything. {stats.tryOnVisitors} so far.
+                        </Text>
+                      )}
+                    </Box>
+
+                    {stats.refunded > 0 && (
+                      <Text variant="bodySm" as="p" tone="subdued">
+                        {stats.refunded} attributed order{stats.refunded === 1 ? " was" : "s were"} refunded,
+                        already deducted above.
+                      </Text>
+                    )}
+                  </BlockStack>
+                )}
+              </BlockStack>
+            </Card>
+          </Layout.Section>
+
+          {topProducts?.length > 0 && (
+            <Layout.Section>
+              <Card>
+                <BlockStack gap="300">
+                  <Text as="h2" variant="headingMd">Most tried on</Text>
+                  {topProducts.map((p) => (
+                    <InlineStack key={p.title} align="space-between" blockAlign="center">
+                      <Text variant="bodyMd" as="p">{p.title}</Text>
+                      <Text variant="bodyMd" as="p" tone="subdued">
+                        {p.tryOns.toLocaleString()} try-on{p.tryOns === 1 ? "" : "s"}
+                      </Text>
+                    </InlineStack>
+                  ))}
+                </BlockStack>
+              </Card>
+            </Layout.Section>
+          )}
 
           <Layout.Section variant="oneThird">
             <Card>
@@ -364,9 +563,43 @@ export default function Index() {
                   Current Plan
                 </Text>
                 <Badge tone="info">{activePlan}</Badge>
-                <Text variant="bodyMd" as="p">
-                  Daily Limit: {activePlan === "Starter" ? "50" : activePlan === "Pro" ? "200" : "500"} try-ons
-                </Text>
+
+                {/* Read from the entitlement, not guessed from the plan name.
+                    This card previously hardcoded "50" in the markup, so it
+                    reported a number the backend had never agreed to and could
+                    not follow a plan change. */}
+                {usage && usage.included > 0 ? (
+                  <BlockStack gap="150">
+                    <Text variant="bodyMd" as="p">
+                      <b>{usage.used.toLocaleString()}</b> of{" "}
+                      {usage.included.toLocaleString()} try-ons used today
+                    </Text>
+                    <Box background="bg-fill-tertiary" borderRadius="100" minHeight="6px">
+                      <Box
+                        background={usage.overage > 0 ? "bg-fill-caution" : "bg-fill-brand"}
+                        borderRadius="100"
+                        minHeight="6px"
+                        width={`${Math.min(100, (usage.used / usage.included) * 100)}%`}
+                      />
+                    </Box>
+                    {usage.overage > 0 ? (
+                      <Text variant="bodySm" as="p" tone="caution">
+                        {usage.overage.toLocaleString()} beyond your plan today. Try-ons
+                        keep working and the extra is billed at the end of the month.
+                      </Text>
+                    ) : (
+                      <Text variant="bodySm" as="p" tone="subdued">
+                        Resets at midnight UTC. Busy days keep working past this and
+                        are billed as they go.
+                      </Text>
+                    )}
+                  </BlockStack>
+                ) : (
+                  <Text variant="bodyMd" as="p" tone="subdued">
+                    Usage appears here once your plan is active.
+                  </Text>
+                )}
+
                 <Button url="/app/subscribe?plan=Pro" variant="primary">
                   Upgrade to Pro
                 </Button>

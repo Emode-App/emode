@@ -60,8 +60,12 @@ export async function POST(request: Request) {
 
                 const planConfig = PLAN_CONFIG[planId];
                 const limits = planConfig
-                    ? { dailyLimit: planConfig.dailyLimit, unlimited: planConfig.unlimited }
-                    : { dailyLimit: 5, unlimited: false };
+                    ? {
+                        dailyLimit: planConfig.dailyLimit,
+                        overageDaily: planConfig.overageDaily,
+                        unlimited: planConfig.unlimited,
+                    }
+                    : { dailyLimit: 5, overageDaily: 0, unlimited: false };
                 const stripeCustomerId = session.customer as string;
 
                 // ── Consumer plan: attach the entitlement directly to the buyer's
@@ -77,6 +81,7 @@ export async function POST(request: Request) {
                         subject_id: userId,
                         plan: planId,
                         daily_generation_limit: limits.dailyLimit,
+                        overage_daily: limits.overageDaily ?? 0,
                         unlimited: limits.unlimited,
                         renews_at: session.mode === 'subscription'
                             ? new Date(Date.now() + 30 * 24 * 60 * 60 * 1000).toISOString()
@@ -136,6 +141,7 @@ export async function POST(request: Request) {
                         subject_id: merchant.id,
                         plan: planId,
                         daily_generation_limit: limits.dailyLimit,
+                        overage_daily: limits.overageDaily ?? 0,
                         unlimited: limits.unlimited,
                         renews_at: session.mode === 'subscription'
                             ? new Date(Date.now() + 30 * 24 * 60 * 60 * 1000).toISOString()

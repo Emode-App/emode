@@ -163,6 +163,7 @@ export async function POST(request: Request) {
             subject_id: merchantId,
             plan,
             daily_generation_limit: limits.dailyLimit,
+            overage_daily: limits.overageDaily,
             unlimited: limits.unlimited,
             renews_at: null, // Lifetime.
         });
