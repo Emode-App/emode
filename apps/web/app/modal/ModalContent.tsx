@@ -210,16 +210,45 @@ export function ModalContent({ initialProduct, onClose }: ModalContentProps) {
         supabase.auth.getUser().then(({ data: { user } }) => setUser(user));
     }, []);
 
+    /**
+     * Resolve the Shopify shop to its merchant, server-side.
+     *
+     * This used to query `merchants` straight from the browser with the anon
+     * key. RLS lockdown ended that: the only SELECT policy is "you own it, or
+     * your JWT email matches shop_domain", and a shopper is neither — so the
+     * query matched nothing, `.single()` answered 406, and the `.then` was
+     * never reached because there was no error branch to reach it with.
+     *
+     * The consequence was invisible and expensive. merchantId stayed empty, so
+     * every Shopify try-on was charged to the shopper's personal free tier
+     * instead of the merchant's paid entitlement, and the merchant's analytics
+     * never saw the try-ons happening on their own storefront.
+     */
     useEffect(() => {
         if (merchantId || !shopDomain) return;
-        supabase
-            .from('merchants')
-            .select('id')
-            .eq('shop_domain', shopDomain)
-            .single()
-            .then(({ data }) => {
-                if (data?.id) setMerchantId(data.id);
-            });
+        let cancelled = false;
+
+        (async () => {
+            try {
+                const res = await fetch(
+                    `/api/merchant/by-shop?shop=${encodeURIComponent(shopDomain)}`
+                );
+                const data = await res.json();
+                if (cancelled) return;
+                if (res.ok && data.merchantId) {
+                    setMerchantId(data.merchantId);
+                } else if (!res.ok) {
+                    // Loud on purpose. Silence here means the merchant is not
+                    // billed and not credited, and that is the exact failure
+                    // that went unnoticed before.
+                    console.error('[emode] Could not resolve shop to merchant:', data.error);
+                }
+            } catch (err) {
+                if (!cancelled) console.error('[emode] Merchant lookup failed:', err);
+            }
+        })();
+
+        return () => { cancelled = true; };
     }, [shopDomain, merchantId]);
 
     // Anonymous shoppers get a persistent guest ID so the free tier (5/day) works
