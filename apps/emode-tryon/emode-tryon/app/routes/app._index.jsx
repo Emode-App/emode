@@ -9,6 +9,7 @@ import {
   Box,
   Banner,
   Badge,
+  List,
   InlineStack,
 } from "@shopify/polaris";
 import { TitleBar } from "@shopify/app-bridge-react";
@@ -55,13 +56,92 @@ function categoryFor(productType, title) {
   return "uncategorized";
 }
 
+/**
+ * Is the emodeAI Buttons block actually in the live theme?
+ *
+ * This used to be inferred from `genCount > 0` — i.e. the app decided the block
+ * was installed only once a shopper had completed a try-on. That is a different
+ * question, and it gets the common case backwards: a merchant who adds the
+ * block correctly and then has a quiet day still sees "one step left". On a
+ * fresh store with no traffic it is guaranteed to be wrong, which includes
+ * every App Store reviewer who follows the setup instructions exactly.
+ *
+ * So ask the theme. App blocks are recorded in the JSON template as
+ * "shopify://apps/<app>/blocks/<handle>/<uuid>", so the block handle appearing
+ * in a product template's block map is the actual answer.
+ *
+ * Returns true, false, or null for "could not tell" — vintage themes use
+ * .liquid templates with no JSON to read, and a scope that has not been
+ * re-granted yet throws. Null is not false: claiming a correctly configured
+ * store is broken is worse than saying nothing, so the caller falls back.
+ */
+async function themeBlockInstalled(admin) {
+  let files;
+  try {
+    const res = await admin.graphql(`
+      query emodeThemeBlockCheck {
+        themes(first: 1, roles: [MAIN]) {
+          nodes {
+            files(filenames: ["templates/product.json", "templates/product.*.json"], first: 20) {
+              nodes {
+                body { ... on OnlineStoreThemeFileBodyText { content } }
+              }
+            }
+          }
+        }
+      }
+    `);
+    const json = await res.json();
+    if (json?.errors?.length) {
+      console.warn("[emode] Theme read failed:", json.errors[0]?.message);
+      return null;
+    }
+    files = json?.data?.themes?.nodes?.[0]?.files?.nodes;
+  } catch (err) {
+    console.warn("[emode] Theme read threw:", err?.message || err);
+    return null;
+  }
+
+  // No JSON product template at all: a vintage theme, or a theme mid-processing.
+  // Nothing to read, so nothing to claim.
+  if (!files?.length) return null;
+
+  for (const file of files) {
+    const content = file?.body?.content;
+    if (!content) continue;
+
+    let template;
+    try {
+      template = JSON.parse(content);
+    } catch {
+      continue;
+    }
+
+    for (const section of Object.values(template?.sections || {})) {
+      for (const block of Object.values(section?.blocks || {})) {
+        // A merchant can add the block and then switch it off. Present but
+        // disabled renders nothing, so it is not installed for our purposes.
+        if (block?.disabled === true) continue;
+        if (typeof block?.type === "string" && block.type.includes("/blocks/emode_buttons/")) {
+          return true;
+        }
+      }
+    }
+  }
+
+  // Read a JSON product template and the block was not in it. This is the one
+  // path that can honestly say "not installed".
+  return false;
+}
+
 // Give the merchant an emode account keyed to their shop email and link it to
 // the merchant row. Without owner_user_id, getMerchantForUser() in the web app
 // can never resolve a Shopify merchant, so the admin dashboard shows the
 // "no merchant account linked" state forever.
 //
-// The account is created pre-confirmed and passwordless: emode signs in with a
-// magic link, so the merchant just enters this same email at /login.
+// The account is created pre-confirmed with no password set. The merchant signs
+// in at /login with this email, either by setting a password through "forgot
+// password" or by having a sign-in link emailed to them.
 async function linkMerchantAccount(admin, merchant) {
   if (merchant.owner_user_id) return merchant;
 
@@ -242,6 +322,21 @@ export const loader = async ({ request }) => {
 
   let productCount = 0;
   let hasTryOns = false;
+  // Asked once per dashboard load, outside the `merchant` branch: whether the
+  // theme is set up does not depend on whether we have a merchant row yet.
+  const blockInstalled = await themeBlockInstalled(admin);
+
+  // The emode account is keyed to the shop's contact email (see
+  // linkMerchantAccount), and it is not stored on the merchant row. Naming the
+  // exact address beats "your store's contact email", which sends people to go
+  // and look it up.
+  let shopEmail = null;
+  try {
+    const res = await admin.graphql(`{ shop { email } }`);
+    shopEmail = (await res.json())?.data?.shop?.email || null;
+  } catch {
+    // Non-fatal: the panel just falls back to describing the address.
+  }
   if (merchant) {
     // 4. Sync the Shopify billing plan into the emode entitlement — this is what
     // /api/generate actually enforces, so an upgrade via Shopify billing must
@@ -406,6 +501,8 @@ export const loader = async ({ request }) => {
     activePlan,
     productCount,
     hasTryOns,
+    blockInstalled,
+    shopEmail,
     stats,
     usage,
     topProducts,
@@ -414,8 +511,29 @@ export const loader = async ({ request }) => {
   };
 };
 
+/**
+ * Deep link that ADDS the block, rather than dropping the merchant in the editor.
+ *
+ * The old link was `?context=apps` with no template. Two things wrong with it:
+ * context=apps is the app EMBED format, and emodeAI Buttons is an app block; and
+ * with no template Shopify defaults to index.json, so it opened the theme editor
+ * on the HOME PAGE. A merchant clicking "add the block" landed somewhere the
+ * block cannot go and had to find it themselves.
+ *
+ * addAppBlockId puts it in the product template's main section, beside add to
+ * cart, with the editor waiting on save. The block's own schema declares
+ * templates: ["product"], so this is the only place it belongs.
+ *
+ * api_key is the app's client_id; the handle is the Liquid filename.
+ */
+const THEME_DEEP_LINK =
+  "shopify:admin/themes/current/editor" +
+  "?template=product" +
+  "&addAppBlockId=a8bdc109e414119e97ece1a0ab1b0df1/emode_buttons" +
+  "&target=mainSection";
+
 export default function Index() {
-  const { merchant, activePlan, productCount, ownerLinked, hasTryOns, stats, usage, topProducts } =
+  const { merchant, activePlan, productCount, ownerLinked, hasTryOns, blockInstalled, shopEmail, stats, usage, topProducts } =
     useLoaderData();
 
   const money = (n) =>
@@ -432,11 +550,59 @@ export default function Index() {
     ? ((stats.tryOnRate - stats.controlRate) / stats.controlRate) * 100
     : null;
 
+  // Prefer what the theme says. `blockInstalled` is null when the theme could
+  // not be read (vintage .liquid theme, scope not yet re-granted), and only then
+  // does the try-on count stand in — an old signal beats a confident wrong one.
+  const themeReady = blockInstalled === null ? hasTryOns : blockInstalled;
+
+  // Studio is a paid upgrade, not part of every account. Gated identically in
+  // apps/web/app/admin/studio/page.tsx and in the model-shot API behind it;
+  // listing it unconditionally promised Starter merchants a screen that would
+  // turn them away when they got there.
+  const hasStudio = ["pro", "growth", "lifetime_pro", "lifetime_founder"]
+    .includes(merchant?.plan);
+
   return (
     <Page>
       <TitleBar title="emodeAI Dashboard" />
       <BlockStack gap="500">
         <Layout>
+          {/* Setup comes before analytics. This banner used to render at the
+              bottom of the page, under the 30-day summary and the top-products
+              card, so a store that had never shown a try-on button led with
+              three cards of zeroes and buried the one action that would fix
+              them. On a fresh install this is the only thing worth reading. */}
+          {!themeReady && (
+            <Layout.Section>
+              <Banner title="One step left: add the try-on buttons" tone="warning">
+                <p>
+                  emodeAI is connected, but nothing appears on your storefront until
+                  the <b>emodeAI Buttons</b> block is added to your product template.
+                </p>
+                {/* Numbered rather than "add the app block". App Store requirement
+                    5.1.3 asks for detailed setup instructions, and more to the
+                    point, "add the block" assumes the merchant already knows where
+                    blocks live. */}
+                <Box paddingBlockStart="300">
+                  <List type="number">
+                    <List.Item>Click <b>Add try-on buttons</b> below. The theme editor opens on a product page with the block already placed.</List.Item>
+                    <List.Item>Drag it wherever you want it. Directly under Add to cart works well.</List.Item>
+                    <List.Item>Click <b>Save</b> in the theme editor.</List.Item>
+                    <List.Item>Visit any product page on your storefront to see it.</List.Item>
+                  </List>
+                </Box>
+                {/* Polaris v12 uses logical properties; `paddingTop` is not a
+                    recognized prop and gets forwarded to the DOM, which React
+                    warns about. */}
+                <Box paddingBlockStart="300">
+                  <Button url={THEME_DEEP_LINK} target="_blank" variant="primary">
+                    Add try-on buttons
+                  </Button>
+                </Box>
+              </Banner>
+            </Layout.Section>
+          )}
+
           <Layout.Section>
             <Card>
               <BlockStack gap="200">
@@ -455,14 +621,65 @@ export default function Index() {
                     ? `${productCount} products synced to emode.`
                     : "No products synced yet — they'll sync automatically on next load."}
                 </Text>
+                {/* This panel is the whole app for most merchants, so it has to
+                    say what is on the other surface and why they would go there.
+                    It previously mentioned only model photography, which reads
+                    like an optional extra rather than the rest of the product. */}
                 {ownerLinked && (
-                  <Box paddingBlockStart="200">
-                    <Text variant="bodyMd" as="p" tone="subdued">
-                      Model photography and your full asset library live at{" "}
-                      <b>emode.style/login</b>. Sign in with this store&apos;s contact
-                      email. The account already exists, and you can set a password
-                      or have a sign-in link emailed to you.
-                    </Text>
+                  <Box paddingBlockStart="400">
+                    <BlockStack gap="200">
+                      <Text variant="headingSm" as="h3">Your full emodeAI account</Text>
+                      <Text variant="bodyMd" as="p" tone="subdued">
+                        This page covers your Shopify store. The rest of emodeAI lives
+                        at emode.style, signed in with{" "}
+                        <b>{shopEmail || "this store's contact email"}</b>:
+                      </Text>
+                      <List>
+                        <List.Item>Full analytics, beyond the 30-day summary below</List.Item>
+                        <List.Item>Your product and asset library</List.Item>
+                        {hasStudio && (
+                          <List.Item>Studio — model photography generated from flat product images</List.Item>
+                        )}
+                      </List>
+                      <Text variant="bodyMd" as="p" tone="subdued">
+                        The account already exists. Sign in with a password, or have a
+                        link emailed to you.
+                      </Text>
+                      <Box paddingBlockStart="100">
+                        <Button url="https://www.emode.style/login" target="_blank">
+                          Open emode.style
+                        </Button>
+                      </Box>
+
+                      {/* Starter can reach Studio's page but not use it. Saying so
+                          here, next to the thing it belongs to, is the only place
+                          a merchant learns the feature exists at all — the plan
+                          page lists it as a line item they have no context for.
+                          The upgrade goes through Shopify billing, never through
+                          emode.style: charging a Shopify merchant off-platform is
+                          a breach of requirement 1.2.1. */}
+                      {!hasStudio && (
+                        <Box paddingBlockStart="300">
+                          <Card background="bg-surface-secondary">
+                            <BlockStack gap="200">
+                              <InlineStack gap="200" blockAlign="center">
+                                <Text variant="headingSm" as="h4">Studio</Text>
+                                <Badge tone="attention">Pro and Growth</Badge>
+                              </InlineStack>
+                              <Text variant="bodyMd" as="p" tone="subdued">
+                                Turn a flat product photo into model photography, without
+                                a shoot. Upgrade to Pro to switch it on for this store.
+                              </Text>
+                              <Box paddingBlockStart="100">
+                                <Button url="/app/subscribe" variant="primary">
+                                  See plans
+                                </Button>
+                              </Box>
+                            </BlockStack>
+                          </Card>
+                        </Box>
+                      )}
+                    </BlockStack>
                   </Box>
                 )}
               </BlockStack>
@@ -593,15 +810,27 @@ export default function Index() {
                         width={`${Math.min(100, (usage.used / usage.included) * 100)}%`}
                       />
                     </Box>
+                    {/* This said the overage was "billed at the end of the month"
+                        and "billed as they go". Neither is true. The Shopify
+                        billing config in shopify.server.js has no usage line
+                        item and nothing calls appUsageRecordCreate, so overage
+                        is counted and never charged. Telling a merchant they
+                        are running up a bill that does not exist makes them
+                        throttle a feature they have already paid for, and a
+                        listing or UI that disagrees with the charge a merchant
+                        actually sees is a rejection under requirement 4.2.1.
+                        If metered overage is implemented later, this copy has
+                        to change back in the same commit. */}
                     {usage.overage > 0 ? (
                       <Text variant="bodySm" as="p" tone="caution">
-                        {usage.overage.toLocaleString()} beyond your plan today. Try-ons
-                        keep working and the extra is billed at the end of the month.
+                        {usage.overage.toLocaleString()} past today&apos;s included
+                        allowance. Try-ons carry on at no extra charge, up to{" "}
+                        {usage.ceiling.toLocaleString()} a day.
                       </Text>
                     ) : (
                       <Text variant="bodySm" as="p" tone="subdued">
-                        Resets at midnight UTC. Busy days keep working past this and
-                        are billed as they go.
+                        Resets at midnight UTC. Busy days keep working past this at no
+                        extra charge, up to {usage.ceiling.toLocaleString()} a day.
                       </Text>
                     )}
                   </BlockStack>
@@ -618,37 +847,23 @@ export default function Index() {
             </Card>
           </Layout.Section>
 
-          <Layout.Section>
-            {hasTryOns ? (
-              <Banner title="Theme extension is live" tone="success">
+          {/* Installed: reassurance, and a way back to the editor. Stays at the
+              bottom because it needs reading once, not every visit. */}
+          {themeReady && (
+            <Layout.Section>
+              <Banner title="Try-on buttons are live" tone="success">
                 <p>
-                  Shoppers have completed try-ons on your storefront, so the{" "}
-                  <b>emodeAI Buttons</b> block is installed and working. Use the
-                  Theme Editor below if you want to move or restyle it.
+                  The <b>emodeAI Buttons</b> block is in your published theme&apos;s
+                  product template. Use the Theme Editor to move or restyle it.
                 </p>
                 <Box paddingBlockStart="200">
-                  <Button url={`shopify:admin/themes/current/editor?context=apps`} target="_blank">
+                  <Button url={THEME_DEEP_LINK} target="_blank">
                     Open Theme Editor
                   </Button>
                 </Box>
               </Banner>
-            ) : (
-            <Banner title="Action Required: Activate Theme Extension" tone="warning">
-              <p>
-                To show the try-on buttons on your product pages, you must go to your Theme Editor 
-                and add the <b>emodeAI Buttons</b> app block.
-              </p>
-              {/* Polaris v12 uses logical properties; `paddingTop` is not a
-                  recognized prop and gets forwarded to the DOM, which React
-                  warns about. */}
-              <Box paddingBlockStart="200">
-                <Button url={`shopify:admin/themes/current/editor?context=apps`} target="_blank">
-                  Open Theme Editor
-                </Button>
-              </Box>
-            </Banner>
-            )}
-          </Layout.Section>
+            </Layout.Section>
+          )}
         </Layout>
       </BlockStack>
     </Page>
