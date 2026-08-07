@@ -121,7 +121,31 @@ export async function POST(request: Request) {
 
                 // Generate brand slug from shop domain or email
                 const shopId = shopDomain || customerEmail || session.id;
-                const brandSlug = slugify(shopId.replace(/@.*$/, '').replace(/\..*$/, ''));
+
+                // Do NOT invent a brand name from the email.
+                //
+                // This used to be shopId.split('@')[0], so paying from
+                // brandonmtalla@gmail.com produced a merchant called
+                // "brandonmtalla" and a dashboard headed "BRANDONMTALLA
+                // DASHBOARD". With a wallet filling the email in, that is not
+                // even the buyer's chosen address, let alone their brand.
+                //
+                // The dashboard already renders "Your Dashboard" when the name
+                // is missing, and onboarding asks for the real one, so a null
+                // is strictly better than a guess scraped off an email.
+                //
+                // Read before writing: this is an upsert keyed on shop_domain,
+                // so every column named here is overwritten on a repeat
+                // payment. Passing null unconditionally would wipe the name of
+                // a returning merchant changing plans.
+                const { data: existing } = await supabase
+                    .from('merchants')
+                    .select('brand_name, brand_slug')
+                    .eq('shop_domain', shopId)
+                    .maybeSingle();
+
+                const brandName = existing?.brand_name ?? null;
+                const brandSlug = existing?.brand_slug ?? null;
 
                 // 1. Upsert merchant with all identity fields
                 const { data: merchant } = await supabase
@@ -133,7 +157,7 @@ export async function POST(request: Request) {
                             plan: planId,
                             stripe_customer_id: stripeCustomerId || null,
                             owner_user_id: ownerUserId,
-                            brand_name: shopId.split('@')[0].split('.')[0],
+                            brand_name: brandName,
                             brand_slug: brandSlug,
                         },
                         { onConflict: 'shop_domain' }
