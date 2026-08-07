@@ -1,7 +1,12 @@
 # Shopify App Store listing: filled-in brief
 
 Written against the actual submission form, field by field, with every character
-count checked. Form reports **18 issues to fix**.
+count checked. Form is down to **1 issue to fix**: the screencast URL, which
+needs a recording nobody can generate for you. See `docs/screencast-script.md`.
+
+The app itself is deployed and current: app version `emodeai-10` carries the
+`read_themes` scope, and the Fly app is serving the dashboard code that uses
+it.
 
 https://apps.shopify.com/services/partner-app-submissions/a8bdc109e414119e97ece1a0ab1b0df1/en
 
@@ -97,16 +102,29 @@ apparel visualizer
 reduce returns
 ```
 
-**Web search content** — optional, worth filling.
+**Web search content** — optional, and now filled and saved.
 
-Title tag (60 max, 42 used)
+The requirements page defers to Google's own title-tag and meta-description
+guidance rather than setting its own rules, so the binding constraints are the
+form's limits plus the listing rules that apply everywhere: no statistics
+(4.3.3), no superlatives, and no pricing outside Pricing details (4.2.3). None
+of the copy below carries a number.
+
+Shopify's marketing guide also says to cover multiple common spellings of a
+term. "try on" and "try-on" are split across the two fields deliberately, so
+both index without either field reading like keyword stuffing.
+
+Title tag (60 max, 43 used). Keyword first, brand last: Google truncates the
+tail, and the tail is the part a searcher least needs.
 ```
-emodeAI: virtual try-on for fashion stores
+Virtual Try On for Fashion Stores | emodeAI
 ```
 
-Meta description (160 max, 136 used)
+Meta description (160 max, 147 used). Under 160 so Google is unlikely to
+truncate it, and it names both sides of the product — what the shopper gets and
+what the merchant gets.
 ```
-Add a virtual try-on button to your product pages. Shoppers see clothes on their own body, and you see which try-ons turned into orders.
+Add a virtual try-on button to your product pages. Shoppers see clothes on their own body before they buy, and you see which try-ons became orders.
 ```
 
 ---
@@ -139,18 +157,53 @@ extensions, and emodeAI installs as one. Leaving it unticked is one of the
 
 ## Pricing details
 
-The form shows **0 public plans**. Plans are configured behind the **Manage**
-link, not typed here. They must match `app/shopify.server.js` exactly:
+Three public plans are now created and saved, under **Manual pricing**, matching
+the `billing` config in `app/shopify.server.js`:
 
-| Plan | Price | Include in the description |
-|---|---|---|
+| Handle | Display name | Price | Top features |
+|---|---|---|---|
+| `starter` | Starter | $29/month | 500 try-ons a day included; try-on button on all product pages; dressing room for full outfits; try-on to purchase attribution |
+| `pro` | Pro | $79/month | 2,000 try-ons a day included; everything in Starter; model shots from a product photo; advanced analytics |
+| `growth` | Growth | $149/month | 5,000 try-ons a day included; everything in Pro; scene control on model shots; priority processing |
+
+All three are **Monthly recurring**, no yearly price and no free trial, because
+the Billing API config defines neither. Offering a yearly price on the listing
+that the app cannot actually charge is a 4.2.1 mismatch.
+
+**"This plan has additional charges" is deliberately left unticked on all
+three.** Overage is counted and never billed: there is no usage line item in the
+billing config and nothing calls `appUsageRecordCreate`. Ticking it would
+declare a charge that does not exist.
+
+Do not say overage is billed per generation, for the same reason. What is true:
+try-ons keep working past the included allowance at no extra charge, up to
+double it — Starter 1,000 a day, Pro 4,000, Growth 10,000.
+
+**"I have approval to charge merchants outside of the Shopify Billing API" has
+been unticked.** It was ticked, which was false — emodeAI bills through the
+Billing API — and it was what made the form demand a billing-information URL.
+Unticking removed the field and its error. There is no billing info page to
+build. Do not re-tick it.
+
+---|---|---|
 | Starter | $29/month | 500 try-ons a day included |
 | Pro | $79/month | 2,000 try-ons a day, model photography |
 | Growth | $149/month | 5,000 try-ons a day, scene control, priority processing |
 
-Say that busy days keep working past the included allowance and are billed per
-generation. A listing that disagrees with the charge a merchant actually sees is
-a rejection under 4.2.1 and a support problem afterwards.
+**Do not say overage is billed per generation.** It is not billed at all. The
+Billing API config in `app/shopify.server.js` has no usage line item and nothing
+in the app calls `appUsageRecordCreate`, so try-ons past the allowance are
+counted and then forgiven. Describing a charge that never lands is the same
+4.2.1 mismatch as hiding one.
+
+What is true, and worth saying: try-ons keep working past the included
+allowance at no extra charge, up to double it. Starter 500 included and 1,000 a
+day hard ceiling, Pro 2,000 and 4,000, Growth 5,000 and 10,000.
+
+**Untick "I have approval to charge merchants outside of the Shopify Billing
+API."** It is currently ticked, which is both false and the reason the form
+demands a billing-information URL. Unticking removes that field and its
+validation error. There is no billing info page to build.
 
 ---
 
@@ -178,10 +231,21 @@ Email is pre-confirmed and password sign-in is verified against the live auth
 endpoint. No SSO, no 2FA, not a Shopify store credential, so it satisfies all
 three of the form's prohibitions.
 
+**`scripts/seed-review-account.sql` has been run**, so this account now resolves
+to a real store rather than the connect-your-store screen. Verified in the
+database: demo store `emodeai-review-demo.myshopify.com`, Growth plan, comped,
+5 products all carrying public CDN image URLs, none of them exposed to the
+marketplace, and a Growth entitlement of 5,000 a day so generation does not hit
+the 5-a-day default mid-review.
+
+That is the state the reviewer will land in. Sign in once yourself before
+submitting anyway — the database being right is not the same as the page
+rendering right.
+
 Account description:
 
 ```
-Merchant dashboard for emodeAI. Sign in at emode.style/login. This account has no store connected yet, so it opens on the connect-your-store screen. Installing the app on a test store attaches that store automatically and the dashboard fills in.
+Merchant dashboard for emodeAI, at emode.style/login. Covers the parts of the app that live outside the Shopify admin: Studio for generating model photography, the product library, and full analytics. A demo store with a sample catalogue is already attached to this account. The Shopify-facing half of the app is tested by installing it on a development store, which does not need these credentials.
 ```
 
 Rotate this password once review is done.
@@ -194,7 +258,7 @@ Rotate this password once review is done.
 Merchant flow
 1. Install the app on a development store with at least one apparel product.
 2. The app opens on the dashboard, which shows installation status, plan and daily usage.
-3. Open Theme Editor from the dashboard, and confirm the emodeAI Buttons app block appears on the product template.
+3. Click "Add try-on buttons" on the dashboard. This deep links into the theme editor with the emodeAI Buttons block already placed in the product template. Click Save.
 4. Open Plan in the app navigation to see all plans. Plans can be changed in either direction from here.
 
 Buyer flow
@@ -203,10 +267,12 @@ Buyer flow
 7. Upload any full-length photo of a person. A generated try-on appears in a few seconds.
 8. Tap Dressing Room, add a second garment, select both and choose Try Together.
 
-Signing in to the web dashboard
-9. Go to emode.style/login and sign in with the test account above.
-10. It opens on the closet. Choose "For brands" to reach the dashboard.
-11. With no store connected the dashboard explains how to connect one. Shopify merchants install the app and nothing is purchased there, since billing runs through Shopify.
+The rest of the merchant dashboard
+Not everything fits inside the Shopify admin. Studio, the product library and full analytics are at emode.style, and the test account above reaches them.
+9. Go to emode.style/login and sign in with the test account credentials above.
+10. Choose "For brands". A demo store is already attached, so the product library is populated.
+11. Open Studio, pick a product and generate a model shot. This is the same generation engine as the try-on, run against a flat product image instead of a shopper photo.
+12. Installing the app on your own development store also creates an emodeAI account for that store, keyed to its contact email. The dashboard in step 2 names the address. That is how a real merchant reaches their own data, and is separate from the test account above.
 
 Notes
 - Generation takes roughly five to fifteen seconds.
