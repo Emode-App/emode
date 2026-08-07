@@ -518,27 +518,28 @@
         return false;
       }
 
-      function swapSections(sections) {
-        if (!sections) return false;
-        var swapped = false;
-        Object.keys(sections).forEach(function (name) {
-          var markup = sections[name];
-          if (!markup) return;
-          try {
-            var parsed = new DOMParser().parseFromString(markup, 'text/html');
-            // The section renders wrapped in its own container; find the same
-            // node in the live page and replace only its contents.
-            var incoming = parsed.querySelector('.shopify-section, #shopify-section-' + name) || parsed.body;
-            var target = document.getElementById('shopify-section-' + name)
-              || document.querySelector('#CartDrawer')
-              || document.getElementById(name);
-            if (target && incoming) {
-              target.innerHTML = incoming.innerHTML;
-              swapped = true;
-            }
-          } catch (err) { /* a theme that does not match this shape */ }
-        });
-        return swapped;
+      /**
+       * Hand the response to the theme and let it redraw itself.
+       *
+       * This used to swap the returned markup in by hand: find a container,
+       * assign innerHTML. When the exact wrapper could not be matched it fell
+       * back to the whole document body, so a complete cart section was placed
+       * INSIDE the existing cart section — which is why the drawer showed "Your
+       * cart" twice, once empty and once real, stacked.
+       *
+       * Dawn and the themes derived from it expose renderContents() on the
+       * <cart-drawer> element for exactly this. It knows its own structure and
+       * which nodes to replace. Using it is correct by construction, where
+       * guessing at selectors from outside the theme is correct by luck.
+       */
+      function renderIntoDrawer(payload) {
+        var drawer = document.querySelector('cart-drawer');
+        if (drawer && typeof drawer.renderContents === 'function') {
+          try { drawer.renderContents(payload); return true; } catch (err) {
+            console.warn('[emodeAI] cart-drawer.renderContents failed:', err);
+          }
+        }
+        return false;
       }
 
       var actions = window.Shopify.actions;
@@ -587,12 +588,12 @@
             console.log('[emodeAI] Added to cart:', cartItems);
             closeEmodeModal();
 
-            var refreshed = swapSections(data && data.sections);
-            var opened = openDrawer();
-
-            // Only leave the page if the drawer could not be made truthful.
-            // Showing a stale "your cart is empty" is worse than navigating.
-            if (!refreshed && !opened) {
+            // Let the theme redraw, then open. If it cannot redraw itself,
+            // the drawer would show what was on the page at load — so leave
+            // instead. A stale "your cart is empty" is worse than navigating.
+            if (renderIntoDrawer(data)) {
+              openDrawer();
+            } else {
               window.location.href = root + 'cart';
             }
           });
