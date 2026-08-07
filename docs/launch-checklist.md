@@ -38,7 +38,20 @@ Answers to the access questionnaire are grounded in what the code does: no
 customer names, emails, phone numbers or addresses are ever received or stored,
 so request **no protected customer fields**, only the Orders resource.
 
-### 2. AppSumo: submit the listing
+### 2. Stripe live keys  ·  blocks all direct and Shopify revenue
+
+Production is running Stripe in **test mode**, confirmed by calling the live
+checkout endpoint and getting back a `cs_test_` session. A merchant who picks a
+plan today reaches a checkout that cannot take their money.
+
+Steps and the order they have to happen in are in
+[docs/go-live.md](go-live.md). The trap is switching the secret key without the
+webhook secret: payments then succeed while every webhook fails signature
+verification, so merchants are charged and their plan never activates.
+
+Does not block AppSumo. Lifetime codes never touch Stripe.
+
+### 3. AppSumo: submit the listing
 
 Copy is drafted. Still needs founding date, headquarters city, LinkedIn URL,
 team size, stage and funding, plus the six screenshots.
