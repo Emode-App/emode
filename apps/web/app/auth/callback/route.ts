@@ -77,7 +77,13 @@ export async function GET(request: Request) {
         // Supabase accepts both 'email' and 'magiclink' for a magic-link token
         // depending on how the link was minted, and getting it wrong reads as an
         // invalid token — indistinguishable, to the user, from an expired link.
-        const candidates = otpType
+        // A recovery link is not a sign-in link. It verifies as type 'recovery'
+        // and must land on the page where a new password is chosen, not on the
+        // dashboard - otherwise someone who clicked "forgot password" is simply
+        // signed in and never gets to set one.
+        const candidates = otpType === 'recovery'
+            ? ['recovery']
+            : otpType
             ? [otpType, otpType === 'email' ? 'magiclink' : 'email']
             : ['email', 'magiclink'];
 
@@ -87,7 +93,10 @@ export async function GET(request: Request) {
                 type: type as any,
                 token_hash: tokenHash,
             });
-            if (!error) return NextResponse.redirect(new URL(next, requestUrl.origin));
+            if (!error) {
+                const destination = otpType === 'recovery' ? '/auth/set-password' : next;
+                return NextResponse.redirect(new URL(destination, requestUrl.origin));
+            }
             lastError = error.message;
         }
 

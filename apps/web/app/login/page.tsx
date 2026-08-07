@@ -2,7 +2,7 @@
 
 import { useState, useEffect } from 'react';
 import { supabase } from '../../lib/supabase/browser';
-import { Mail, ArrowRight, Sparkles } from 'lucide-react';
+import { Mail, Lock, ArrowRight } from 'lucide-react';
 import Link from 'next/link';
 import { Logo } from '../../components/Logo';
 
@@ -34,6 +34,17 @@ export default function LoginPage() {
     const [message, setMessage] = useState<{ type: 'success' | 'error', text: string } | null>(null);
     const [oauthLoading, setOauthLoading] = useState<string | null>(null);
     const [awaitingLink, setAwaitingLink] = useState(false);
+    const [password, setPassword] = useState('');
+
+    /**
+     * Password first, magic link as the fallback.
+     *
+     * It used to be link-only, which meant every sign-in was a trip to an
+     * inbox, and an App Store reviewer asked for a username and password could
+     * not be given one at all. A link is still the right escape hatch for
+     * someone who has forgotten theirs.
+     */
+    const [mode, setMode] = useState<'password' | 'signup' | 'magic'>('password');
 
     // Already signed in — no reason to show a sign-in form.
     //
@@ -154,6 +165,72 @@ export default function LoginPage() {
         }
     };
 
+    const handlePassword = async (e: React.FormEvent) => {
+        e.preventDefault();
+        setLoading(true);
+        setMessage(null);
+
+        try {
+            if (mode === 'signup') {
+                const { error } = await supabase.auth.signUp({
+                    email,
+                    password,
+                    options: { emailRedirectTo: `${window.location.origin}/auth/callback` },
+                });
+                if (error) throw error;
+                setMessage({
+                    type: 'success',
+                    text: 'Account created. Check your email to confirm the address, then sign in.',
+                });
+                return;
+            }
+
+            const { error } = await supabase.auth.signInWithPassword({ email, password });
+            if (error) throw error;
+            window.location.replace('/auth/home');
+        } catch (error: any) {
+            const raw = error?.message || '';
+            setMessage({
+                type: 'error',
+                text:
+                    // Supabase says "Invalid login credentials" for a wrong
+                    // password AND for an account that has never had one, which
+                    // is every account created before passwords existed. Point
+                    // at the way out rather than insisting they are wrong.
+                    /invalid login credentials/i.test(raw)
+                        ? 'That email and password did not match. If you have only ever signed in by link, use "Email me a link" below and set a password afterwards.'
+                        : /pwned|leaked|compromise/i.test(raw)
+                        ? 'That password has appeared in a known data breach. Pick a different one.'
+                        : raw || 'Could not sign in.',
+            });
+        } finally {
+            setLoading(false);
+        }
+    };
+
+    const handleForgot = async () => {
+        if (!email) {
+            setMessage({ type: 'error', text: 'Enter your email address first.' });
+            return;
+        }
+        setLoading(true);
+        setMessage(null);
+        try {
+            const { error } = await supabase.auth.resetPasswordForEmail(email, {
+                redirectTo: `${window.location.origin}/auth/callback`,
+            });
+            if (error) throw error;
+            setMessage({
+                type: 'success',
+                text: 'Check your email for a link to set a new password.',
+            });
+        } catch (error: any) {
+            setMessage({ type: 'error', text: error?.message || 'Could not send that email.' });
+        } finally {
+            setLoading(false);
+        }
+    };
+
     return (
         <div className="min-h-screen bg-off-white flex items-center justify-center p-6 bg-[radial-gradient(circle_at_top_right,_var(--tw-gradient-stops))] from-purple-50 via-white to-orange-50">
             <div className="w-full max-w-md">
@@ -187,7 +264,10 @@ export default function LoginPage() {
                         <div className="h-px flex-1 bg-black/10" />
                     </div>
 
-                    <form onSubmit={handleLogin} className="space-y-6">
+                    <form
+                        onSubmit={mode === 'magic' ? handleLogin : handlePassword}
+                        className="space-y-5"
+                    >
                         <div>
                             <label htmlFor="email" className="block text-xs font-bold uppercase tracking-widest text-charcoal/40 mb-3 ml-1">
                                 Email Address
@@ -198,6 +278,7 @@ export default function LoginPage() {
                                     id="email"
                                     type="email"
                                     required
+                                    autoComplete="email"
                                     value={email}
                                     onChange={(e) => setEmail(e.target.value)}
                                     placeholder="name@example.com"
@@ -206,31 +287,82 @@ export default function LoginPage() {
                             </div>
                         </div>
 
+                        {mode !== 'magic' && (
+                            <div>
+                                <div className="flex items-baseline justify-between mb-3 ml-1">
+                                    <label htmlFor="password" className="block text-xs font-bold uppercase tracking-widest text-charcoal/40">
+                                        Password
+                                    </label>
+                                    {mode === 'password' && (
+                                        <button
+                                            type="button"
+                                            onClick={handleForgot}
+                                            className="text-xs text-charcoal/40 underline hover:text-charcoal"
+                                        >
+                                            Forgot?
+                                        </button>
+                                    )}
+                                </div>
+                                <div className="relative">
+                                    <Lock className="absolute left-4 top-1/2 -translate-y-1/2 w-5 h-5 text-charcoal/20" />
+                                    <input
+                                        id="password"
+                                        type="password"
+                                        required
+                                        autoComplete={mode === 'signup' ? 'new-password' : 'current-password'}
+                                        value={password}
+                                        onChange={(e) => setPassword(e.target.value)}
+                                        placeholder={mode === 'signup' ? 'At least 8 characters' : 'Your password'}
+                                        className="w-full bg-white/50 border border-black/5 rounded-2xl py-4 pl-12 pr-4 focus:ring-2 focus:ring-purple-500 outline-none transition-all font-medium"
+                                    />
+                                </div>
+                            </div>
+                        )}
+
                         <button
                             type="submit"
                             disabled={loading}
                             className="w-full btn-generate py-4 flex items-center justify-center gap-3 font-bold tracking-widest uppercase text-sm group disabled:opacity-50"
                         >
-                            {loading ? 'Sending link...' : (
-                                <>
-                                    Send Magic Link <ArrowRight className="w-4 h-4 group-hover:translate-x-1 transition-transform" />
-                                </>
-                            )}
+                            {loading
+                                ? 'Working…'
+                                : (
+                                    <>
+                                        {mode === 'magic' ? 'Send Magic Link' : mode === 'signup' ? 'Create Account' : 'Sign In'}
+                                        <ArrowRight className="w-4 h-4 group-hover:translate-x-1 transition-transform" />
+                                    </>
+                                )}
                         </button>
 
                         {message && (
-                            <div className={`p-4 rounded-xl text-sm font-medium animate-in fade-in slide-in-from-top-2 ${message.type === 'success' ? 'bg-green-50 text-green-700' : 'bg-red-50 text-red-700'
+                            <div className={`p-4 rounded-xl text-sm font-medium leading-relaxed animate-in fade-in slide-in-from-top-2 ${message.type === 'success' ? 'bg-green-50 text-green-700' : 'bg-red-50 text-red-700'
                                 }`}>
                                 {message.text}
                             </div>
                         )}
                     </form>
 
-                    <div className="mt-8 pt-8 border-t border-black/5 text-center">
-                        <p className="text-xs text-charcoal/30 font-medium flex items-center justify-center gap-2">
-                            <Sparkles className="w-4 h-4 text-accent-gold" />
-                            No passwords, just magic.
-                        </p>
+                    <div className="mt-8 pt-6 border-t border-black/5 flex flex-col gap-2 text-center text-xs text-charcoal/40">
+                        {mode === 'password' && (
+                            <>
+                                <button type="button" onClick={() => { setMode('signup'); setMessage(null); }} className="hover:text-charcoal">
+                                    New here? <span className="underline">Create an account</span>
+                                </button>
+                                <button type="button" onClick={() => { setMode('magic'); setMessage(null); }} className="hover:text-charcoal">
+                                    <span className="underline">Email me a link instead</span>
+                                </button>
+                            </>
+                        )}
+                        {mode === 'signup' && (
+                            <button type="button" onClick={() => { setMode('password'); setMessage(null); }} className="hover:text-charcoal">
+                                Already have an account? <span className="underline">Sign in</span>
+                            </button>
+                        )}
+                        {mode === 'magic' && (
+                            <button type="button" onClick={() => { setMode('password'); setMessage(null); }} className="hover:text-charcoal">
+                                <span className="underline">Use a password instead</span>
+                            </button>
+                        )}
                     </div>
                 </div>
 

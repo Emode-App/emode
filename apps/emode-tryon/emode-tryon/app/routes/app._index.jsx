@@ -15,12 +15,22 @@ import { TitleBar } from "@shopify/app-bridge-react";
 import { authenticate } from "../shopify.server";
 import { supabase } from "../supabase.server";
 
-// Shopify billing plan names → emode entitlement limits (mirrors
-// apps/web/lib/stripe-plan-config.ts — keep in sync if plans change)
+// Shopify billing plan names → emode entitlement limits.
+//
+// Mirrors apps/web/lib/stripe-plan-config.ts and MUST stay in sync: this map
+// WRITES the entitlement whenever a merchant opens the app, so a stale value
+// here silently overwrites whatever the rest of the system agreed. It was left
+// on the old 50/200/unlimited numbers when allowances moved to 500/2000/5000,
+// which meant opening the Shopify app reset a paying merchant back to fifty
+// try-ons a day.
+//
+// overageDaily is what a plan may run past its allowance, billed per
+// generation. No plan is unlimited any more: an unbounded tier is an unbounded
+// bill for us, since every try-on is a paid image generation.
 const PLAN_LIMITS = {
-  starter: { dailyLimit: 50, unlimited: false, marketplace: false },
-  pro: { dailyLimit: 200, unlimited: false, marketplace: true },
-  growth: { dailyLimit: 0, unlimited: true, marketplace: true },
+  starter: { dailyLimit: 500, overageDaily: 500, unlimited: false, marketplace: false },
+  pro: { dailyLimit: 2000, overageDaily: 2000, unlimited: false, marketplace: true },
+  growth: { dailyLimit: 5000, overageDaily: 5000, unlimited: false, marketplace: true },
 };
 
 // Shopify has no notion of emode's marketplace categories, so derive one from
@@ -264,6 +274,7 @@ export const loader = async ({ request }) => {
           subject_id: merchant.id,
           plan: planKey,
           daily_generation_limit: limits.dailyLimit,
+          overage_daily: limits.overageDaily,
           unlimited: limits.unlimited,
           renews_at: new Date(Date.now() + 30 * 24 * 60 * 60 * 1000).toISOString(),
         },
@@ -433,10 +444,10 @@ export default function Index() {
                   <Text as="h2" variant="headingMd">
                     Installation Status
                   </Text>
-                  <Badge tone="success">Connected to emode AI</Badge>
+                  <Badge tone="success">Connected to emodeAI</Badge>
                 </InlineStack>
                 <Text variant="bodyMd" as="p">
-                  Your shop <b>{merchant?.shop_domain}</b> is correctly linked to the emode AI backend.
+                  Your shop <b>{merchant?.shop_domain}</b> is correctly linked to the emodeAI backend.
                   Virtual try-ons are enabled for your product pages once the theme extension is active.
                 </Text>
                 <Text variant="bodyMd" as="p" tone="subdued">
@@ -447,10 +458,10 @@ export default function Index() {
                 {ownerLinked && (
                   <Box paddingBlockStart="200">
                     <Text variant="bodyMd" as="p" tone="subdued">
-                      Deeper analytics, the marketplace and Studio live at{" "}
+                      Model photography and your full asset library live at{" "}
                       <b>emode.style/login</b>. Sign in with this store&apos;s contact
-                      email — the account already exists and uses a magic link, so
-                      there&apos;s no password to set.
+                      email. The account already exists, and you can set a password
+                      or have a sign-in link emailed to you.
                     </Text>
                   </Box>
                 )}
