@@ -581,15 +581,22 @@ export function ModalContent({ initialProduct, onClose }: ModalContentProps) {
     // Distinct from `autoAdded` above, which guards the Chrome-extension handoff.
     const dressingRoomAutoAdd = useRef(false);
     useEffect(() => {
+        // Must wait for hydration. This ran on mount, added the garment, and
+        // then the guest-room load finished a moment later and called
+        // setDressingRoomItems(items) with what was in storage — replacing the
+        // whole array and taking the new item with it. The add was happening;
+        // it was being overwritten a tick later, which looks identical to never
+        // having happened.
+        if (!hydrated) return;
         if (dressingRoomAutoAdd.current) return;
         if (defaultTab !== 'dressing-room') return;
         if (!product?.title) return;
         dressingRoomAutoAdd.current = true;
         handleAddToDressingRoom();
-        // Mount only: this is the intent carried in by the URL, not a reaction
-        // to later state.
+        // Once, after hydration. The ref makes it once; `hydrated` makes it late
+        // enough to survive.
         // eslint-disable-next-line react-hooks/exhaustive-deps
-    }, []);
+    }, [hydrated]);
 
     const handleAddToCart = () => {
         const inIframe = window.parent !== window;
