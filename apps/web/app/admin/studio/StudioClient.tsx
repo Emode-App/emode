@@ -1,7 +1,7 @@
 'use client';
 
-import { useState } from 'react';
-import { Sparkles, Download, Lock, AlertCircle, UserCheck } from 'lucide-react';
+import { useState, useEffect } from 'react';
+import { Sparkles, Download, Lock, AlertCircle, UserCheck, Trash2, X } from 'lucide-react';
 import { supabase } from '../../../lib/supabase/browser';
 
 export type StudioProduct = {
@@ -81,6 +81,47 @@ export function StudioClient({
     const [progress, setProgress] = useState<{ done: number; total: number } | null>(null);
     const [error, setError] = useState<string | null>(null);
     const [assets, setAssets] = useState<StudioAsset[]>(initialAssets);
+    /** The shot being viewed full size. Null when the lightbox is closed. */
+    const [viewing, setViewing] = useState<StudioAsset | null>(null);
+    const [deleting, setDeleting] = useState<string | null>(null);
+
+    // Escape closes the lightbox. People expect it, and without it the only way
+    // out of a full-screen image is hunting for the X.
+    useEffect(() => {
+        if (!viewing) return;
+        const onKey = (e: KeyboardEvent) => { if (e.key === 'Escape') setViewing(null); };
+        window.addEventListener('keydown', onKey);
+        return () => window.removeEventListener('keydown', onKey);
+    }, [viewing]);
+
+    const deleteAsset = async (assetId: string) => {
+        setDeleting(assetId);
+        setError(null);
+        try {
+            const { data: { session } } = await supabase.auth.getSession();
+            if (!session) return;
+            const res = await fetch('/api/assets/model-shot', {
+                method: 'DELETE',
+                headers: {
+                    'Content-Type': 'application/json',
+                    Authorization: `Bearer ${session.access_token}`,
+                },
+                body: JSON.stringify({ id: assetId }),
+            });
+            const data = await res.json();
+            if (!res.ok) throw new Error(data.error || 'Could not delete that shot.');
+
+            setAssets((prev) => prev.filter((a) => a.id !== assetId));
+            setViewing((v) => (v && v.id === assetId ? null : v));
+            // The server clears the house model when its image is deleted; mirror
+            // that here so the badge does not stay lit on a shot that is gone.
+            if (data.clearedHouseModel) setHouseModelUrl(null);
+        } catch (err: any) {
+            setError(err.message || 'Could not delete that shot.');
+        } finally {
+            setDeleting(null);
+        }
+    };
 
     const toggleProduct = (id: string) => {
         if (!isPremium) return setSelectedIds([id]); // No batch below Growth.
@@ -434,8 +475,18 @@ export function StudioClient({
                     <div className="grid grid-cols-2 md:grid-cols-4 gap-6">
                         {assets.map((a) => (
                             <div key={a.id} className="group relative bg-white rounded-2xl overflow-hidden border border-black/5">
-                                {/* eslint-disable-next-line @next/next/no-img-element */}
-                                <img src={a.public_url} alt="Generated model shot" className="w-full block" />
+                                {/* A button, not a bare img: opening the full size is
+                                    a real action and should be reachable by keyboard
+                                    and announced as such. */}
+                                <button
+                                    type="button"
+                                    onClick={() => setViewing(a)}
+                                    className="block w-full cursor-zoom-in"
+                                    aria-label="View this shot full size"
+                                >
+                                    {/* eslint-disable-next-line @next/next/no-img-element */}
+                                    <img src={a.public_url} alt="Generated model shot" className="w-full block" />
+                                </button>
                                 <div className="absolute top-3 right-3 flex gap-2 opacity-0 group-hover:opacity-100 transition-opacity">
                                     {isPremium && (
                                         <button
@@ -461,6 +512,20 @@ export function StudioClient({
                                     >
                                         <Download className="w-4 h-4" />
                                     </a>
+                                    {/* Confirmed, because a generated shot costs a real
+                                        image generation and there is no undo — the row
+                                        and the file both go. */}
+                                    <button
+                                        onClick={() => {
+                                            if (window.confirm('Delete this shot? This cannot be undone.')) deleteAsset(a.id);
+                                        }}
+                                        disabled={deleting === a.id}
+                                        aria-label="Delete this shot"
+                                        title="Delete"
+                                        className="w-9 h-9 rounded-full bg-white/90 backdrop-blur-sm shadow-sm flex items-center justify-center hover:bg-red-50 hover:text-red-600 transition-colors disabled:opacity-40"
+                                    >
+                                        <Trash2 className="w-4 h-4" />
+                                    </button>
                                 </div>
                                 {(a.options?.model || a.options?.scene) && (
                                     <p className="p-3 text-[11px] text-charcoal/50 truncate">
@@ -472,6 +537,63 @@ export function StudioClient({
                     </div>
                 )}
             </div>
+
+            {/* Full size, in place. Opening a new tab to look at your own image
+                loses the page you were working on, and a download just to see
+                something is worse still. */}
+            {viewing && (
+                <div
+                    className="fixed inset-0 z-50 bg-black/90 flex items-center justify-center p-6"
+                    onClick={() => setViewing(null)}
+                    role="dialog"
+                    aria-modal="true"
+                    aria-label="Model shot, full size"
+                >
+                    <button
+                        onClick={() => setViewing(null)}
+                        aria-label="Close"
+                        className="absolute top-6 right-6 w-11 h-11 rounded-full bg-white/10 hover:bg-white/20 text-white flex items-center justify-center transition-colors"
+                    >
+                        <X className="w-5 h-5" />
+                    </button>
+
+                    {/* Stop the backdrop handler firing when the image itself is
+                        clicked, or the thing you are trying to look at closes. */}
+                    <div className="max-w-5xl max-h-full flex flex-col items-center gap-4" onClick={(e) => e.stopPropagation()}>
+                        {/* eslint-disable-next-line @next/next/no-img-element */}
+                        <img
+                            src={viewing.public_url}
+                            alt="Generated model shot, full size"
+                            className="max-h-[80vh] w-auto rounded-xl shadow-2xl"
+                        />
+                        <div className="flex items-center gap-3">
+                            <a
+                                href={viewing.public_url}
+                                download
+                                target="_blank"
+                                rel="noopener noreferrer"
+                                className="px-5 py-2.5 rounded-xl bg-white text-obsidian text-xs font-bold uppercase tracking-widest hover:bg-white/90 transition-colors inline-flex items-center gap-2"
+                            >
+                                <Download className="w-4 h-4" /> Download
+                            </a>
+                            <button
+                                onClick={() => {
+                                    if (window.confirm('Delete this shot? This cannot be undone.')) deleteAsset(viewing.id);
+                                }}
+                                disabled={deleting === viewing.id}
+                                className="px-5 py-2.5 rounded-xl border border-white/20 text-white text-xs font-bold uppercase tracking-widest hover:bg-white/10 transition-colors inline-flex items-center gap-2 disabled:opacity-40"
+                            >
+                                <Trash2 className="w-4 h-4" /> {deleting === viewing.id ? 'Deleting…' : 'Delete'}
+                            </button>
+                        </div>
+                        {(viewing.options?.model || viewing.options?.scene) && (
+                            <p className="text-xs text-white/50">
+                                {[viewing.options.model, viewing.options.scene].filter(Boolean).join(' · ')}
+                            </p>
+                        )}
+                    </div>
+                </div>
+            )}
         </>
     );
 }

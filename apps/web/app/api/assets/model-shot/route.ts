@@ -290,3 +290,79 @@ export async function PATCH(request: Request) {
         return NextResponse.json({ error: 'Could not update the house model.' }, { status: 500 });
     }
 }
+
+/**
+ * Delete a generated shot.
+ *
+ * Scoped to the caller's own merchant in the WHERE clause rather than checked
+ * first and deleted after: an id from another brand's library simply matches
+ * nothing, so there is no window between the check and the write and no way to
+ * probe whether someone else's id exists.
+ *
+ * Storage object goes too. Leaving the file behind would mean a merchant who
+ * deleted a shot still has it sitting on a public URL — which is not what
+ * "delete" means to the person clicking it, and the bucket would grow forever
+ * with images nobody can see or reach.
+ */
+export async function DELETE(request: Request) {
+    try {
+        const token = request.headers.get('authorization')?.replace(/^Bearer\s+/i, '');
+        if (!token) return NextResponse.json({ error: 'Sign in first.' }, { status: 401 });
+
+        const { data: { user } } = await supabase.auth.getUser(token);
+        if (!user) return NextResponse.json({ error: 'Sign in first.' }, { status: 401 });
+
+        const { id } = await request.json().catch(() => ({ id: '' }));
+        if (!id || typeof id !== 'string') {
+            return NextResponse.json({ error: 'An asset id is required.' }, { status: 400 });
+        }
+
+        const { data: owned } = await supabase
+            .from('merchants')
+            .select('id, house_model_url')
+            .eq('owner_user_id', user.id)
+            .order('created_at', { ascending: false });
+
+        const merchant = owned?.[0];
+        if (!merchant) return NextResponse.json({ error: 'No store found.' }, { status: 404 });
+
+        // Returning the row tells us both that it was theirs and where the file
+        // lives, in one round trip.
+        const { data: removed } = await supabase
+            .from('product_assets')
+            .delete()
+            .eq('id', id)
+            .eq('merchant_id', merchant.id)
+            .select('storage_path, public_url')
+            .maybeSingle();
+
+        if (!removed) {
+            return NextResponse.json({ error: 'That asset is not yours, or is already gone.' }, { status: 404 });
+        }
+
+        if (removed.storage_path) {
+            const { error: storageError } = await supabase.storage
+                .from('assets')
+                .remove([removed.storage_path]);
+            // The row is already gone, so a failure here leaks a file rather
+            // than breaking the delete. Worth logging, not worth failing.
+            if (storageError) {
+                console.error('[API/ModelShot] storage delete failed:', storageError.message);
+            }
+        }
+
+        // A deleted shot cannot go on being the house model — every future
+        // generation would reference an image that no longer exists.
+        if (merchant.house_model_url && merchant.house_model_url === removed.public_url) {
+            await supabase
+                .from('merchants')
+                .update({ house_model_url: null, house_model_description: null })
+                .eq('id', merchant.id);
+        }
+
+        return NextResponse.json({ deleted: true, clearedHouseModel: merchant.house_model_url === removed.public_url });
+    } catch (err: any) {
+        console.error('[API/ModelShot] DELETE', err?.message || err);
+        return NextResponse.json({ error: 'Could not delete that asset.' }, { status: 500 });
+    }
+}
