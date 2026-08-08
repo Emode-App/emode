@@ -19,7 +19,13 @@ shared front door.
 ## Status
 
 **The server exists.** `emode`, id `1535443895146647562`, created 2026-08-07,
-with all fourteen channels below. What is NOT done, and cannot be automated:
+with all fourteen channels below.
+
+**Invite:** `https://discord.gg/6XVUMVtvF` — already wired to the *Join the
+Discord* button on the landing page, via `DISCORD_INVITE_URL` in
+`apps/web/lib/site.ts`. Change it there if the invite is ever rotated.
+
+What is NOT done, and cannot be automated:
 
 - **Categories.** Discord's context menus only respond to trusted events, so
   "Create Category" cannot be driven from a script the way the "Create Channel"
@@ -31,6 +37,18 @@ with all fourteen channels below. What is NOT done, and cannot be automated:
   `#announcements` and `#changelog` need setting to staff-post-only.
 - **Community mode and onboarding**, which is where the shopper/merchant
   question below gets configured.
+
+### Two of these are on a clock
+
+**The invite expires in 30 days.** Discord's default, and its expiry dropdown
+only responds to trusted events so it could not be set from a script. Server
+name → Invite People → Edit invite link → **Expire After: Never** → Generate.
+Max uses is already No limit. Skip this and the landing page button becomes a
+dead link a month after launch, silently — which is the usual reason a Discord
+link on a public page stops working.
+
+**`#billing` is public.** It is meant for plans, invoices and refunds. Lock it
+to `@merchant` and `@staff` before anyone is invited, not after.
 
 Everything in this document that is not marked above still needs doing by hand
 in Server Settings.
@@ -141,16 +159,16 @@ Steps 1 and 2 are done; the rest are not.
 6. Turn on **Onboarding** and ask one question: *shopper or merchant?* Use the
    answer to grant a role and hide the half of the server that is not theirs.
    This is the single highest-value setting for a two-audience server.
-7. Make an invite link that **never expires** with **unlimited uses** for the
-   apps and the listing. The default one-day link is the usual reason a Discord
-   link in an App Store listing is dead within a week.
+7. ~~Make an invite link with unlimited uses.~~ Done — but it **expires in 30
+   days**. Set Expire After to **Never**; see the warning above.
 
 ---
 
 ## Where the link goes, and where it does not
 
-**Yes:** the consumer app (settings or profile), `emode.style`, AppSumo listing
-and its updates, `#changelog` link in merchant onboarding emails.
+**Yes:** the consumer app (settings or profile), `emode.style` — the landing
+page button is already wired — AppSumo listing and its updates, and a
+`#changelog` link in merchant onboarding emails.
 
 **Not the Shopify App Store listing.** Support there must resolve to
 `support@emode.style`. A Discord invite as the support channel reads as "we
