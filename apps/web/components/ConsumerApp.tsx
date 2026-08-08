@@ -2,6 +2,7 @@
 
 import { useState } from 'react';
 import { Sparkles, Users, Tag, Scissors, ArrowRight, Check } from 'lucide-react';
+import { DISCORD_INVITE_URL } from '../lib/site';
 
 /**
  * The consumer app, on the merchant landing page.
@@ -233,7 +234,18 @@ export function ConsumerApp() {
                                     <div className="mb-3">
                                         <StoreBadges />
                                     </div>
-                                    <ComingSoonButton label="Join the Discord" variant="outline" />
+                                    {/* Was a ComingSoonButton. The server exists now, so
+                                        this is a real link — a disabled button on a
+                                        landing page teaches people the brand is not
+                                        ready yet, and that is expensive to unlearn. */}
+                                    <a
+                                        href={DISCORD_INVITE_URL}
+                                        target="_blank"
+                                        rel="noopener noreferrer"
+                                        className="w-full flex items-center justify-center px-6 py-3.5 rounded-xl border border-white/15 text-white hover:bg-white/5 transition-colors"
+                                    >
+                                        <span className="text-sm font-bold">Join the Discord</span>
+                                    </a>
                                     <p className="text-[11px] text-white/30 mt-3 text-center">
                                         Drops, previews, and the styling chaos.
                                     </p>

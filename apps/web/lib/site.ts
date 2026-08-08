@@ -25,3 +25,18 @@ export const SITE_HOST = SITE_URL.replace(/^https?:\/\//, '');
 export const SUPPORT_EMAIL = `support@${SITE_HOST}`;
 export const API_EMAIL = `api@${SITE_HOST}`;
 export const FOUNDERS_EMAIL = `founders@${SITE_HOST}`;
+
+/**
+ * The community. Server id 1535443895146647562.
+ *
+ * Kept here rather than inline because the invite is a rotatable credential of
+ * sorts: revoking it and issuing another is a normal thing to do, and it should
+ * be one edit when that happens.
+ *
+ * NOTE: this link currently expires. Discord's default is 30 days and its
+ * expiry dropdown cannot be driven from a script, so it was left as created.
+ * Set Expire After to **Never** in the invite settings, or the button on the
+ * landing page becomes a dead link a month after launch — which is the usual
+ * reason a Discord link in a store listing does not work.
+ */
+export const DISCORD_INVITE_URL = 'https://discord.gg/6XVUMVtvF';
