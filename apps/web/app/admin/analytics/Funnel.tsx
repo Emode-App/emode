@@ -80,9 +80,18 @@ export function Funnel({ stats, products }: { stats: FunnelStats; products: Prod
 
             <div className="bg-white rounded-2xl shadow-sm border border-black/5 p-8 mb-10">
                 <h3 className="text-xl font-heading font-bold mb-1">BY PRODUCT</h3>
-                <p className="text-sm text-charcoal/50 mb-6">
-                    Which pieces shoppers want to see on themselves. A high view count with a low
+                <p className="text-sm text-charcoal/50 mb-2">
+                    Which pieces shoppers want to see on themselves. Lots of shoppers with a low
                     try-on rate usually means the photography is already doing the job.
+                </p>
+                {/* Merchants ask why a number is higher than the people they know
+                    visited. Shoppers are counted per browser, because a storefront
+                    visitor has no account to be counted by — so one person on a
+                    phone and a laptop is two, and clearing site data starts a new
+                    one. Cheaper to say here than to answer in support. */}
+                <p className="text-xs text-charcoal/40 mb-6">
+                    A shopper is counted per browser. The same person on two devices, or after
+                    clearing their site data, counts more than once.
                 </p>
 
                 {products.length === 0 ? (
