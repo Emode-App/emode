@@ -51,7 +51,21 @@ async function getProductRows(merchantId: string): Promise<ProductRow[]> {
 
     const rows = await Promise.all(
         products.map(async (p: any) => {
-            const [{ count: impressions }, { count: tryOns }] = await Promise.all([
+            /**
+             * Both sides of the rate have to be the same unit.
+             *
+             * tryon_impressions holds one row per visitor per product, forever —
+             * the upsert dedupes on (merchant, visitor, product). So it is a
+             * count of SHOPPERS, not of page views. This used to be divided into
+             * a raw count of generations, which is a count of EVENTS, and one
+             * shopper trying a jacket five times produced "5 try-ons, 1 view" and
+             * a conversion rate of 500%.
+             *
+             * So the numerator is distinct shoppers too. Raw try-ons stay as
+             * their own column, because repeat use is worth seeing — it just is
+             * not a conversion rate.
+             */
+            const [{ count: viewers }, { count: tryOns }, { data: tryOnRows }] = await Promise.all([
                 serviceClient
                     .from('tryon_impressions')
                     .select('*', { count: 'exact', head: true })
@@ -60,18 +74,33 @@ async function getProductRows(merchantId: string): Promise<ProductRow[]> {
                     .from('generation_products')
                     .select('*', { count: 'exact', head: true })
                     .eq('product_id', p.id),
+                // Embedded rather than two round trips per product. Distinct is
+                // counted in JS for the reason given at the top of this file:
+                // PostgREST cannot express COUNT(DISTINCT).
+                serviceClient
+                    .from('generation_products')
+                    .select('generations(visitor_id)')
+                    .eq('product_id', p.id),
             ]);
+
+            const tryOnShoppers = new Set(
+                (tryOnRows || [])
+                    .map((r: any) => r.generations?.visitor_id)
+                    .filter(Boolean)
+            ).size;
+
             return {
                 id: p.id,
                 title: p.title,
                 image: p.primary_image_url,
-                impressions: impressions || 0,
+                viewers: viewers || 0,
                 tryOns: tryOns || 0,
+                tryOnShoppers,
             };
         })
     );
 
-    return rows.sort((a, b) => b.tryOns - a.tryOns || b.impressions - a.impressions);
+    return rows.sort((a, b) => b.tryOns - a.tryOns || b.viewers - a.viewers);
 }
 
 async function getTryOnStats(merchantId: string): Promise<TryOnStats | null> {

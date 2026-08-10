@@ -12,8 +12,16 @@ export type ProductRow = {
     id: string;
     title: string;
     image: string | null;
-    impressions: number;
+    /**
+     * Distinct shoppers who saw the button on this product, not page views:
+     * tryon_impressions holds one row per visitor per product. Named for what
+     * it is, because calling it "views" invited dividing an event count into it.
+     */
+    viewers: number;
+    /** Every generation. Repeat use by one shopper counts every time. */
     tryOns: number;
+    /** Distinct shoppers who tried it on — the numerator that matches viewers. */
+    tryOnShoppers: number;
 };
 
 const pct = (num: number, den: number) => (den > 0 ? `${((num / den) * 100).toFixed(1)}%` : '—');
@@ -32,9 +40,9 @@ const pct = (num: number, den: number) => (den > 0 ? `${((num / den) * 100).toFi
 export function Funnel({ stats, products }: { stats: FunnelStats; products: ProductRow[] }) {
     const cards = [
         {
-            label: 'Product views',
-            value: stats.impressions.toLocaleString(),
-            sub: `${stats.impressionVisitors.toLocaleString()} shopper${stats.impressionVisitors === 1 ? '' : 's'}`,
+            label: 'Shoppers who saw it',
+            value: stats.impressionVisitors.toLocaleString(),
+            sub: `across ${stats.impressions.toLocaleString()} product${stats.impressions === 1 ? '' : 's'} viewed`,
             icon: <Eye className="w-5 h-5" />,
         },
         {
@@ -87,7 +95,8 @@ export function Funnel({ stats, products }: { stats: FunnelStats; products: Prod
                             <thead>
                                 <tr className="text-left text-[10px] uppercase tracking-widest text-charcoal/40 border-b border-black/5">
                                     <th className="pb-3 font-bold">Product</th>
-                                    <th className="pb-3 font-bold text-right">Views</th>
+                                    <th className="pb-3 font-bold text-right">Shoppers</th>
+                                    <th className="pb-3 font-bold text-right">Tried on</th>
                                     <th className="pb-3 font-bold text-right">Try-ons</th>
                                     <th className="pb-3 font-bold text-right">Rate</th>
                                 </tr>
@@ -106,10 +115,13 @@ export function Funnel({ stats, products }: { stats: FunnelStats; products: Prod
                                                 <span className="font-bold truncate">{p.title}</span>
                                             </div>
                                         </td>
-                                        <td className="py-4 text-right tabular-nums">{p.impressions.toLocaleString()}</td>
-                                        <td className="py-4 text-right tabular-nums">{p.tryOns.toLocaleString()}</td>
+                                        <td className="py-4 text-right tabular-nums">{p.viewers.toLocaleString()}</td>
+                                        <td className="py-4 text-right tabular-nums">{p.tryOnShoppers.toLocaleString()}</td>
+                                        <td className="py-4 text-right tabular-nums text-charcoal/50">{p.tryOns.toLocaleString()}</td>
+                                        {/* Shoppers over shoppers. Dividing raw try-ons by
+                                            unique viewers is what produced rates above 100%. */}
                                         <td className="py-4 text-right tabular-nums font-bold">
-                                            {pct(p.tryOns, p.impressions)}
+                                            {pct(p.tryOnShoppers, p.viewers)}
                                         </td>
                                     </tr>
                                 ))}
