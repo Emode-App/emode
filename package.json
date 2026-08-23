@@ -16,7 +16,7 @@
         "eslint": "latest",
         "prettier": "latest",
         "turbo": "latest",
-        "typescript": "latest"
+        "typescript": "5.9.3"
     },
     "packageManager": "npm@11.3.0",
     "dependencies": {
