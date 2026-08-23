@@ -40,3 +40,16 @@ export const FOUNDERS_EMAIL = `founders@${SITE_HOST}`;
  * reason a Discord link in a store listing does not work.
  */
 export const DISCORD_INVITE_URL = 'https://discord.gg/6XVUMVtvF';
+
+/**
+ * The public Shopify App Store listing. `emode-tryon` is the listing's own
+ * handle, not the app's client_id or internal name (that's `emodeai`
+ * elsewhere in this repo) -- Shopify assigns the storefront slug separately
+ * from the app identity, and the two do not have to match.
+ *
+ * Every "Get it on Shopify" / "Shopify App Store" link in the product used to
+ * point at bare apps.shopify.com (the store's homepage) or, on the landing
+ * page, at a literal href="#" that did nothing at all when clicked. One place
+ * to fix that, and one place if the listing URL is ever regenerated.
+ */
+export const SHOPIFY_APP_STORE_URL = 'https://apps.shopify.com/emode-tryon';

@@ -4,7 +4,7 @@ import { useState } from 'react';
 import { Prism as SyntaxHighlighter } from 'react-syntax-highlighter';
 import { vscDarkPlus } from 'react-syntax-highlighter/dist/esm/styles/prism';
 import { Check, Copy, Code2, Sparkles, ShoppingBag } from 'lucide-react';
-import { SITE_URL } from '../../../lib/site';
+import { SITE_URL, SHOPIFY_APP_STORE_URL } from '../../../lib/site';
 
 type Tab = 'ai' | 'snippet' | 'shopify';
 
@@ -152,7 +152,17 @@ Do not change anything else about the site's styling or layout.`;
                         which the script tag cannot do on its own.
                     </p>
                     <ol className="list-decimal ml-5 space-y-2 text-charcoal/60">
-                        <li>Install <b>emodeAI</b> from the Shopify App Store.</li>
+                        <li>
+                            Install <b>emodeAI</b> from the{' '}
+                            <a
+                                href={SHOPIFY_APP_STORE_URL}
+                                target="_blank"
+                                rel="noopener noreferrer"
+                                className="underline hover:text-charcoal"
+                            >
+                                Shopify App Store
+                            </a>.
+                        </li>
                         <li>In your Shopify admin, open <b>Online Store → Themes → Customize</b>.</li>
                         <li>Go to a product page, choose <b>Add block</b>, and pick <b>emodeAI Buttons</b>.</li>
                         <li>Save. The try-on buttons appear on every product page.</li>

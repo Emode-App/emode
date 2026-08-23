@@ -9,6 +9,7 @@ import { useState, useEffect } from 'react';
 import { supabase } from '../lib/supabase/browser';
 import { ConsumerApp } from '../components/ConsumerApp';
 import { FAQ } from '../components/FAQ';
+import { SHOPIFY_APP_STORE_URL } from '../lib/site';
 
 export default function Home() {
     const [billingCycle, setBillingCycle] = useState<'monthly' | 'lifetime'>('monthly');
@@ -197,7 +198,17 @@ export default function Home() {
                             </div>
                             <h3 className="text-2xl font-heading font-bold mb-4">Shopify Store</h3>
                             <p className="text-charcoal/60 text-sm leading-relaxed mb-8">Integrated directly into your product pages for seamless conversion.</p>
-                            <a href="#" className="inline-flex items-center gap-2 text-sm font-bold tracking-widest uppercase hover:gap-4 transition-all">Shopify App Store <ArrowRight className="w-4 h-4" /></a>
+                            {/* Was href="#" -- a literal dead link on the actual
+                                landing page. Clicking "Shopify App Store" did
+                                nothing at all. */}
+                            <a
+                                href={SHOPIFY_APP_STORE_URL}
+                                target="_blank"
+                                rel="noopener noreferrer"
+                                className="inline-flex items-center gap-2 text-sm font-bold tracking-widest uppercase hover:gap-4 transition-all"
+                            >
+                                Shopify App Store <ArrowRight className="w-4 h-4" />
+                            </a>
                         </div>
                         <div className="p-10 bg-off-white rounded-[32px] border border-black/5 hover:shadow-xl transition-all group">
                             <div className="w-16 h-16 bg-white rounded-2xl flex items-center justify-center mb-8 shadow-sm group-hover:bg-purple-gradient group-hover:text-white transition-colors">

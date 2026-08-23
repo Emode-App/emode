@@ -5,6 +5,7 @@ import Link from 'next/link';
 import { ArrowRight, Store, Code2 } from 'lucide-react';
 import { ChoosePlan } from './ChoosePlan';
 import { supabase } from '../../../lib/supabase/browser';
+import { SHOPIFY_APP_STORE_URL } from '../../../lib/site';
 
 /** Set by /admin/onboarding when a signed-out buyer lands there after paying. */
 const PENDING_CLAIM_KEY = 'emode.pendingClaimSessionId';
@@ -123,8 +124,12 @@ export function NoMerchantYet({ email }: { email?: string }) {
                         first time you open the app. Billing is handled inside Shopify, so
                         there is nothing to buy on this page.
                     </p>
+                    {/* Was bare apps.shopify.com -- the store's own homepage,
+                        not this app's listing. Someone who clicked "Get it on
+                        Shopify" landed on Shopify's App Store front page with
+                        no idea what to search for. */}
                     <a
-                        href="https://apps.shopify.com/"
+                        href={SHOPIFY_APP_STORE_URL}
                         target="_blank"
                         rel="noopener noreferrer"
                         className="inline-flex items-center gap-2 px-6 py-3 bg-obsidian text-white rounded-xl text-xs font-bold uppercase tracking-widest hover:bg-black transition-colors"
