@@ -170,14 +170,24 @@ export default async function MarketplacePage({
     // counts should be observable through this page while it is unlaunched --
     // not even by someone who knows to pass ?brand= directly.
     if (!MARKETPLACE_LAUNCHED) {
+        // Centered in the viewport, not pinned near the top of one. The first
+        // version put a few lines of text under pt-32 on a min-h-screen
+        // container, which is correct CSS and a bad page: everything below
+        // the third line was dead space until the footer, hundreds of pixels
+        // of nothing that reads as broken rather than as a page with no more
+        // to say yet. -8rem accounts for the fixed navbar's own height so the
+        // centering is against the space actually left, not the raw
+        // viewport.
         return (
-            <main className="min-h-screen pt-32 pb-20 px-6 max-w-2xl mx-auto text-center">
-                <Sparkles className="w-10 h-10 mx-auto mb-6 text-charcoal/30" />
-                <h1 className="text-5xl font-heading font-bold mb-4 tracking-tighter">THE MARKETPLACE</h1>
-                <p className="text-charcoal/60 text-lg">
-                    Discover and virtually try on fashion from the world&apos;s most innovative
-                    brands. We&apos;re putting the finishing touches on it -- check back soon.
-                </p>
+            <main className="min-h-[calc(100vh-8rem)] flex items-center justify-center px-6">
+                <div className="max-w-2xl text-center">
+                    <Sparkles className="w-10 h-10 mx-auto mb-6 text-charcoal/30" />
+                    <h1 className="text-5xl font-heading font-bold mb-4 tracking-tighter">THE MARKETPLACE</h1>
+                    <p className="text-charcoal/60 text-lg">
+                        Discover and virtually try on fashion from the world&apos;s most innovative
+                        brands. We&apos;re putting the finishing touches on it -- check back soon.
+                    </p>
+                </div>
             </main>
         );
     }
