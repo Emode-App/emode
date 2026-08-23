@@ -2,7 +2,15 @@ import { createClient } from '@supabase/supabase-js';
 import { requireServiceRoleKey } from '../../../lib/supabase/require-key';
 import { Sparkles, ExternalLink, ArrowLeft } from 'lucide-react';
 import Link from 'next/link';
-import { notFound } from 'next/navigation';
+import { notFound, redirect } from 'next/navigation';
+
+// Keep in lockstep with the same constant in ../page.tsx. This route leaks
+// more than the listing page did if left open: getBrand() below returns
+// brand_name, shop_domain and plan before any marketplace_visible check runs
+// at all, so a guessed or previously-seen brand slug exposed a merchant's
+// identity even for a brand with zero visible products. See ../page.tsx for
+// why this matters while the app is in Shopify review.
+const MARKETPLACE_LAUNCHED = false;
 
 const supabase = createClient(
     process.env.NEXT_PUBLIC_SUPABASE_URL!,
@@ -58,6 +66,10 @@ export default async function BrandStorefront({
 }: {
     params: Promise<{ brand: string }>;
 }) {
+    if (!MARKETPLACE_LAUNCHED) {
+        redirect('/marketplace');
+    }
+
     const { brand: brandSlug } = await params;
     const brand = await getBrand(brandSlug);
 

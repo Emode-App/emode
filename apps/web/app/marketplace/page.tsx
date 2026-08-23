@@ -11,6 +11,28 @@ const supabase = createClient(
     requireServiceRoleKey()
 );
 
+/**
+ * The nav links here with a "Soon" badge, but the route itself was fully
+ * live underneath that badge -- reachable, unauthenticated, and rendering
+ * whatever real merchant test data happened to be marketplace_visible at the
+ * time. A label next to a link is not a gate; it is a suggestion nobody
+ * downstream of the link has to honour, and nothing did.
+ *
+ * That is also a live compliance problem, not just an appearance one, while
+ * this app has an active Shopify App Store submission: the review brief
+ * (docs/shopify-submission-brief.md) tells reviewers the marketplace is
+ * "unlaunched and empty" -- because 1.1.6 bars apps that let merchants turn
+ * their stores into classifieds-style marketplaces, and "unlaunched and
+ * empty" was true when that was written. A reviewer who followed the link
+ * and found real products would be looking at a claim that is no longer
+ * true.
+ *
+ * Flip this when the marketplace actually launches. Nothing else about the
+ * page changes -- the gate wraps the existing implementation rather than
+ * replacing it.
+ */
+const MARKETPLACE_LAUNCHED = false;
+
 const CATEGORIES = [
     { label: 'All', value: 'all' },
     { label: 'Tops', value: 'tops' },
@@ -144,6 +166,22 @@ export default async function MarketplacePage({
 }: {
     searchParams: Promise<{ category?: string; search?: string; brand?: string }>;
 }) {
+    // Gate first, before any data fetch. Nothing about brand names or product
+    // counts should be observable through this page while it is unlaunched --
+    // not even by someone who knows to pass ?brand= directly.
+    if (!MARKETPLACE_LAUNCHED) {
+        return (
+            <main className="min-h-screen pt-32 pb-20 px-6 max-w-2xl mx-auto text-center">
+                <Sparkles className="w-10 h-10 mx-auto mb-6 text-charcoal/30" />
+                <h1 className="text-5xl font-heading font-bold mb-4 tracking-tighter">THE MARKETPLACE</h1>
+                <p className="text-charcoal/60 text-lg">
+                    Discover and virtually try on fashion from the world&apos;s most innovative
+                    brands. We&apos;re putting the finishing touches on it -- check back soon.
+                </p>
+            </main>
+        );
+    }
+
     const params = await searchParams;
     const products = await getMarketplaceProducts(params.category, params.search, params.brand);
     const brands = await getBrands();
