@@ -3,21 +3,29 @@ import Link from 'next/link';
 
 export const metadata: Metadata = {
     title: 'emode Terms of Use',
-    description: 'The terms governing use of the emode iOS app.',
+    description:
+        'The terms that apply to the emode iOS app: community rules, AI features, subscriptions, styling sessions and the marketplace.',
 };
 
 /**
  * Terms of Use for the emode iOS app (the consumer fashion social app),
- * distinct from /terms which governs the Shopify app and storefront widget.
- * Apple Guideline 3.1.2(c) requires a functional in-app link to this for any
- * app selling auto-renewing subscriptions, and the same URL goes in App Store
- * Connect -- so this has to render as real HTML for a reviewer opening it cold
- * in Safari, not just resolve.
+ * distinct from /terms which governs the Shopify app and storefront widget --
+ * a merchant integration agreement, not a consumer social product's terms.
+ * The app has three payment surfaces the widget does not: StoreKit
+ * subscriptions, Stripe marketplace orders, and paid styling sessions.
  *
- * Content is published verbatim from docs/app-terms-of-use.md in the
- * fitted-mobile repo, laid out with the same Section pattern as /terms and
- * /privacy for visual consistency. Not legal advice and not reviewed by a
- * lawyer -- if it changes there, it has to change here too.
+ * The styling section matters beyond contract: charging for those sessions
+ * outside in-app purchase relies on App Review Guideline 3.1.3(d), which only
+ * covers real-time person-to-person services. The description here has to
+ * keep matching what the app actually does.
+ *
+ * An earlier draft of this page (branch app-legal-pages, commit 3036650)
+ * linked its Termination section at an /app/delete-account page that was
+ * planned but never built. That link is gone here -- account deletion is
+ * covered on /app/privacy, which links the working deletion-request endpoint
+ * instead of a route that would 404.
+ *
+ * Not legal advice and not reviewed by a lawyer.
  */
 
 const EFFECTIVE = 'August 17, 2026';
@@ -44,17 +52,24 @@ export default function AppTermsPage() {
                 <p className="text-charcoal/50 text-sm font-bold uppercase tracking-widest">
                     Effective {EFFECTIVE}
                 </p>
+                <p className="mt-6 text-charcoal/70 leading-relaxed">
+                    These apply to the emode iOS app. If you are a merchant using the emode
+                    try-on widget, Shopify app or browser extension, see the{' '}
+                    <Link href="/terms" className="underline">widget terms</Link> instead.
+                </p>
             </div>
 
             <div className="space-y-12 text-charcoal/80 leading-relaxed">
-                <p className="text-lg">
-                    By creating an account or using emode, you agree to these Terms and the{' '}
-                    <Link href="/app/privacy" className="underline">Privacy Policy</Link>. You must
-                    be legally able to agree and provide accurate account and transaction
-                    information.
-                </p>
+                <Section n={1} title="Agreement">
+                    <p>
+                        By creating an account or using emode you agree to these Terms and to the{' '}
+                        <Link href="/app/privacy" className="underline">Privacy Policy</Link>. You
+                        must be legally able to agree and must provide accurate account and
+                        transaction information.
+                    </p>
+                </Section>
 
-                <Section n={1} title="Community safety and user content">
+                <Section n={2} title="Community safety and your content">
                     <p>
                         emode has zero tolerance for objectionable content and abusive users. Do
                         not post, message, sell, or generate content involving child sexual
@@ -72,26 +87,27 @@ export default function AppTermsPage() {
                     </p>
                 </Section>
 
-                <Section n={2} title="AI features">
+                <Section n={3} title="AI features">
                     <p>
-                        AI results can be inaccurate, inappropriate, or unrealistic and are for
-                        creative visualization, not a guarantee of product fit or appearance. You
-                        must have permission to upload each image. Face processing requires
-                        separate consent, which you can revoke. Do not use AI features to create
-                        deceptive, exploitative, or unlawful content.
+                        AI results can be inaccurate, unflattering, inappropriate, or unrealistic
+                        and are for creative visualization, not a guarantee of product fit or
+                        appearance. You must have permission to upload each image. Face
+                        processing requires separate consent, which you can revoke at any time.
+                        Do not use AI features to create deceptive, exploitative, or unlawful
+                        content.
                     </p>
                 </Section>
 
-                <Section n={3} title="Subscriptions">
+                <Section n={4} title="Subscriptions">
                     <p>
-                        Digital subscriptions are purchased through Apple or Google and renew
-                        unless canceled in your store settings. Prices and billing periods shown
-                        by the store control. Restore Purchases can recover eligible access.
-                        Refunds are handled under the applicable store&apos;s rules.
+                        Digital subscriptions are purchased through Apple and renew until you
+                        cancel in your App Store settings. Prices and billing periods shown by
+                        the store at purchase control. Restore Purchases can recover access
+                        you&apos;re entitled to. Refunds follow Apple&apos;s rules, not ours.
                     </p>
                 </Section>
 
-                <Section n={4} title="Styling sessions">
+                <Section n={5} title="Styling sessions">
                     <p>
                         A styling session is a live, one-to-one service between you and a verified
                         stylist, booked at the price that stylist sets and held open for the
@@ -114,7 +130,7 @@ export default function AppTermsPage() {
                     </p>
                 </Section>
 
-                <Section n={5} title="Marketplace">
+                <Section n={6} title="Marketplace">
                     <p>
                         Marketplace payments are for physical goods. Sellers are responsible for
                         accurate listings, lawful goods, fulfillment, shipping, returns, and
@@ -125,7 +141,7 @@ export default function AppTermsPage() {
                     </p>
                 </Section>
 
-                <Section n={6} title="Disclaimers and limits">
+                <Section n={7} title="Disclaimers and limits">
                     <p>
                         The service is provided &ldquo;as is&rdquo; to the extent permitted by
                         law. We do not guarantee uninterrupted operation, AI results, listings,
@@ -134,16 +150,18 @@ export default function AppTermsPage() {
                     </p>
                 </Section>
 
-                <Section n={7} title="Termination and contact">
+                <Section n={8} title="Termination and contact">
                     <p>
-                        You may stop using the service or delete your account at any time. We may
-                        restrict access for safety, legal, payment, or Terms violations. Questions
-                        can be sent through in-app Support or to{' '}
-                        <a href="mailto:support@emode.style" className="underline">support@emode.style</a>.
+                        You may stop using the service or delete your account at any time, from
+                        Settings in the app or, if you no longer have the app installed, through
+                        the deletion request on{' '}
+                        <Link href="/app/privacy" className="underline">Privacy Policy</Link>. We
+                        may restrict access for safety, legal, payment, or Terms violations.
                     </p>
                     <p>
-                        See also our <Link href="/app/privacy" className="underline">Privacy
-                        Policy</Link> and <Link href="/support" className="underline">Support</Link>.
+                        Questions can be sent through in-app{' '}
+                        <Link href="/support" className="underline">Support</Link> or to{' '}
+                        <a href="mailto:support@emode.style" className="underline">support@emode.style</a>.
                     </p>
                 </Section>
             </div>
