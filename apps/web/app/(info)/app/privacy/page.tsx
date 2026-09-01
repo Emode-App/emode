@@ -27,6 +27,14 @@ export const metadata: Metadata = {
  * shorter source markdown was a simplification pass, not a correction, so
  * where it dropped detail that's still true, the detail is worth keeping.
  *
+ * The deletion request routes through /app/delete-account, a same-origin
+ * page with a real form (see app/(info)/app/delete-account and
+ * app/api/app/delete-account) rather than linking straight at the Supabase
+ * function that does the actual work -- that function's own confirmation
+ * page sits behind the same gateway that rewrites *.supabase.co responses to
+ * text/plain, which is the exact problem the rest of this work exists to
+ * avoid.
+ *
  *   - Signed URLs for private media: services/privateMedia.ts
  *   - Session-scoped face consent enforced server-side: supabase/functions/ai-proxy
  *   - Revoking consent deletes stored + generated face media: supabase/functions/revoke-ai-consent
@@ -39,7 +47,6 @@ export const metadata: Metadata = {
  */
 
 const EFFECTIVE = 'August 17, 2026';
-const DELETE_ACCOUNT_URL = 'https://scvvbjheyfnxlsiiozta.supabase.co/functions/v1/legal/delete-account';
 
 function Section({ n, title, children }: { n: number; title: string; children: React.ReactNode }) {
     return (
@@ -188,8 +195,8 @@ export default function AppPrivacyPage() {
                     </p>
                     <p>
                         If you no longer have the app installed, you can also submit an{' '}
-                        <a href={DELETE_ACCOUNT_URL} className="underline">external deletion
-                        request</a>.
+                        <Link href="/app/delete-account" className="underline">external deletion
+                        request</Link>.
                     </p>
                 </Section>
 

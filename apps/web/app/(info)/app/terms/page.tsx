@@ -21,9 +21,10 @@ export const metadata: Metadata = {
  *
  * An earlier draft of this page (branch app-legal-pages, commit 3036650)
  * linked its Termination section at an /app/delete-account page that was
- * planned but never built. That link is gone here -- account deletion is
- * covered on /app/privacy, which links the working deletion-request endpoint
- * instead of a route that would 404.
+ * planned but never built, and 404'd. That page now exists for real --
+ * app/(info)/app/delete-account, a same-origin form relayed through
+ * app/api/app/delete-account to the Supabase edge function that already does
+ * the validation and the DB insert.
  *
  * Not legal advice and not reviewed by a lawyer.
  */
@@ -154,9 +155,10 @@ export default function AppTermsPage() {
                     <p>
                         You may stop using the service or delete your account at any time, from
                         Settings in the app or, if you no longer have the app installed, through
-                        the deletion request on{' '}
-                        <Link href="/app/privacy" className="underline">Privacy Policy</Link>. We
-                        may restrict access for safety, legal, payment, or Terms violations.
+                        the{' '}
+                        <Link href="/app/delete-account" className="underline">deletion
+                        request</Link>. We may restrict access for safety, legal, payment, or
+                        Terms violations.
                     </p>
                     <p>
                         Questions can be sent through in-app{' '}
