@@ -1,5 +1,6 @@
 import type { Metadata } from "next";
 import { Inter, Outfit } from "next/font/google";
+import { Analytics } from "@vercel/analytics/next";
 import "@emode/ui/src/globals.css";
 import { ExtensionAuthBridge } from "../components/ExtensionAuthBridge";
 
@@ -28,6 +29,7 @@ export default function RootLayout({
             <body className="antialiased">
                 <ExtensionAuthBridge />
                 {children}
+                <Analytics />
             </body>
         </html>
     );
