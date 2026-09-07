@@ -53,3 +53,14 @@ export const DISCORD_INVITE_URL = 'https://discord.gg/6XVUMVtvF';
  * to fix that, and one place if the listing URL is ever regenerated.
  */
 export const SHOPIFY_APP_STORE_URL = 'https://apps.shopify.com/emode-tryon';
+
+/**
+ * The public TestFlight link for the emode iOS app's beta.
+ *
+ * A public link, not an invite sent one address at a time — anyone with it
+ * can install instantly, up to Apple's 10,000-external-tester cap. Kept here
+ * for the same reason as the other constants above: one place to change it
+ * if it's ever regenerated (e.g. the build it points at gets pulled from
+ * testing) rather than a page-by-page hunt.
+ */
+export const TESTFLIGHT_URL = 'https://testflight.apple.com/join/MsphXM51';

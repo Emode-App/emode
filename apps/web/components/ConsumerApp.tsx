@@ -2,7 +2,7 @@
 
 import { useState } from 'react';
 import { Sparkles, Users, Tag, Scissors, ArrowRight, Check } from 'lucide-react';
-import { DISCORD_INVITE_URL } from '../lib/site';
+import { DISCORD_INVITE_URL, TESTFLIGHT_URL } from '../lib/site';
 
 /**
  * The consumer app, on the merchant landing page.
@@ -228,6 +228,23 @@ export function ConsumerApp() {
                                 </form>
 
                                 <div className="mt-8 pt-8 border-t border-white/10">
+                                    {/* The one CTA here that isn't "coming soon" — the iOS
+                                        build is real and installable today via TestFlight,
+                                        which is why it gets the solid gold treatment the
+                                        greyed-out store badges below deliberately don't. */}
+                                    <a
+                                        href={TESTFLIGHT_URL}
+                                        target="_blank"
+                                        rel="noopener noreferrer"
+                                        className="w-full flex items-center justify-center gap-2 px-6 py-3.5 rounded-xl bg-accent-gold text-black hover:scale-[1.01] transition-transform"
+                                    >
+                                        <span className="text-sm font-bold">Join the iOS Beta</span>
+                                        <ArrowRight className="w-4 h-4" />
+                                    </a>
+                                    <p className="text-[11px] text-white/30 mt-3 mb-6 text-center">
+                                        Free on TestFlight while we&apos;re in beta.
+                                    </p>
+
                                     <p className="text-[10px] uppercase tracking-widest text-white/30 mb-3">
                                         iOS · Android · Web
                                     </p>
