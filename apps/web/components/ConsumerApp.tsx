@@ -242,7 +242,7 @@ export function ConsumerApp() {
                                         <ArrowRight className="w-4 h-4" />
                                     </a>
                                     <p className="text-[11px] text-white/30 mt-3 mb-6 text-center">
-                                        Free on TestFlight while we&apos;re in beta.
+                                        iOS only for now, via TestFlight.
                                     </p>
 
                                     <p className="text-[10px] uppercase tracking-widest text-white/30 mb-3">
