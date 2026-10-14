@@ -59,6 +59,7 @@ export const Navbar = () => {
                         {/* The app is a different product for a different person;
                             it needs a way in that is not scrolling past the plans. */}
                         <Link href="/#app" className="hover:text-accent-gold transition-colors">The App</Link>
+                        <Link href="/mirror" className="hover:text-accent-gold transition-colors">Mirror</Link>
                     </div>
                 </div>
 
