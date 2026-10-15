@@ -2,7 +2,7 @@ import { Metadata } from 'next';
 import Link from 'next/link';
 import { Navbar } from '../../components/Navbar';
 import { Footer } from '../../components/Footer';
-import { TESTFLIGHT_URL } from '../../lib/site';
+import { TESTFLIGHT_URL, MIRROR_TRY_URL } from '../../lib/site';
 import { ArrowRight, ScanLine, Send, PersonStanding, ShieldCheck, Store } from 'lucide-react';
 
 export const metadata: Metadata = {
@@ -27,18 +27,18 @@ export const metadata: Metadata = {
 const STEPS = [
     {
         icon: <ScanLine className="w-5 h-5" />,
-        title: 'Scan the code on the mirror',
-        body: 'Point your phone’s camera at it. A page opens — no app or account needed to start.',
+        title: 'Start on any screen',
+        body: 'Tap “Try it on now” on your phone or laptop — or, at an Emode Mirror in store, scan the code on the glass. No app or account needed.',
     },
     {
         icon: <Send className="w-5 h-5" />,
-        title: 'Send the clothes',
-        body: 'Screenshots from any store, product links, or — if you’re on Emode — pieces straight from your wardrobe. They appear on the mirror as you send them.',
+        title: 'Add the clothes',
+        body: 'Screenshots from any store or product links — and in store, pieces straight from your Emode wardrobe.',
     },
     {
         icon: <PersonStanding className="w-5 h-5" />,
-        title: 'Step back and see it on you',
-        body: 'The mirror takes one photo and shows you wearing what you picked, life-size, head to toe. Swap pieces, try combinations, keep the looks you love on your phone.',
+        title: 'See it on you',
+        body: 'One photo — taken on a timer or picked from your camera roll — and you’re wearing what you chose, head to toe. Swap pieces, try combinations, save the looks you love.',
     },
 ];
 
@@ -63,19 +63,22 @@ export default function MirrorPage() {
                             Your wardrobe.<br />Larger than life.
                         </h1>
                         <p className="text-lg text-charcoal/50 leading-relaxed mb-10">
-                            A life-size mirror that dresses you in anything — from any store, or from your
-                            own Emode wardrobe — without ever stepping into a changing room.
+                            A mirror that dresses you in anything — from any store, or from your own Emode
+                            wardrobe. Try it right now on your phone or laptop, or life-size in store.
                         </p>
                         <div className="flex flex-col sm:flex-row gap-3">
-                            <Link href="/mirror/business" className="btn-primary py-3 px-7 rounded-full font-semibold inline-flex items-center justify-center gap-2">
-                                Bring Emode Mirror to your store <ArrowRight className="w-4 h-4" />
-                            </Link>
-                            <a href={TESTFLIGHT_URL} target="_blank" rel="noopener noreferrer"
-                                className="py-3 px-7 rounded-full font-semibold border border-black/15 hover:border-black/40 transition-colors text-center">
-                                Get the Emode app
+                            <a href={MIRROR_TRY_URL} className="btn-primary py-3.5 px-8 rounded-full font-semibold inline-flex items-center justify-center gap-2">
+                                Try it on now <ArrowRight className="w-4 h-4" />
                             </a>
+                            <Link href="/mirror/business"
+                                className="py-3.5 px-8 rounded-full font-semibold border border-black/15 hover:border-black/40 transition-colors text-center">
+                                Bring it to your store
+                            </Link>
                         </div>
-                        <p className="mt-5 text-sm text-charcoal/40">Pilot locations coming soon.</p>
+                        <p className="mt-5 text-sm text-charcoal/40">
+                            No account needed. Life-size mirrors in pilot stores soon ·{' '}
+                            <a href={TESTFLIGHT_URL} target="_blank" rel="noopener noreferrer" className="underline underline-offset-2 hover:text-charcoal">Get the app</a>
+                        </p>
                     </header>
 
                     <section className="mb-20">

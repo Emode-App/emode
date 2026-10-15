@@ -9,6 +9,7 @@ import { useState, useEffect } from 'react';
 import { supabase } from '../lib/supabase/browser';
 import { ConsumerApp } from '../components/ConsumerApp';
 import { FAQ } from '../components/FAQ';
+import { MirrorFeature } from '../components/MirrorFeature';
 import { SHOPIFY_APP_STORE_URL } from '../lib/site';
 
 export default function Home() {
@@ -166,6 +167,7 @@ export default function Home() {
         <div className="min-h-screen">
             <Navbar />
             <Hero />
+            <MirrorFeature />
 
             {/* Features Section */}
             <section className="py-24 bg-off-white">
