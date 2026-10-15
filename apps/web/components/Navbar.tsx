@@ -59,11 +59,18 @@ export const Navbar = () => {
                         {/* The app is a different product for a different person;
                             it needs a way in that is not scrolling past the plans. */}
                         <Link href="/#app" className="hover:text-accent-gold transition-colors">The App</Link>
+                        <Link href="/mirror" className="hover:text-accent-gold transition-colors">Mirror</Link>
                     </div>
                 </div>
 
                 {/* Right: Actions */}
                 <div className="flex items-center gap-4 z-10">
+                    {/* The centre links are hidden below md and there is no
+                        mobile menu, so on a phone this is the only way to the
+                        mirror from the header. */}
+                    <Link href="/mirror" className="md:hidden text-sm font-semibold text-accent-gold">
+                        Mirror
+                    </Link>
                     {isMarketplace && (
                         <button className="p-2 hover:bg-black/5 rounded-full transition-colors relative">
                             <ShoppingBag className="w-6 h-6" />
