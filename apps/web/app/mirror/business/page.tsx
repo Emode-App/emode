@@ -1,7 +1,7 @@
 import { Metadata } from 'next';
 import { Navbar } from '../../../components/Navbar';
 import { Footer } from '../../../components/Footer';
-import { Shirt, Layers, Link2, BarChart3, ShieldCheck } from 'lucide-react';
+import { Shirt, Store, Layers, Link2, BarChart3, ShieldCheck } from 'lucide-react';
 import { InquiryForm } from './InquiryForm';
 
 export const metadata: Metadata = {
@@ -17,16 +17,22 @@ export const metadata: Metadata = {
  * assume they own a Proto display: most won't, and the form asks rather than
  * presumes. No prices yet -- pilots first.
  *
- * Each point is something the mirror does now. "We report what gets tried" is
- * worded as a report on purpose: the mirror records it per screen, but there
- * is no self-serve store dashboard yet, and the page should not imply one.
+ * Each point is something the mirror does now: the rack is the store's Emode
+ * shop listings, the name and logo show on the mirror's welcome screen, and
+ * the dashboard is a private link per store. Setting a store up is still done
+ * by us, which is why the page leads to a conversation rather than a sign-up.
  */
 
 const POINTS = [
     {
         icon: <Shirt className="w-5 h-5" />,
         title: 'Your pieces, life-size',
-        body: 'Shoppers see your clothes on themselves in seconds, head to toe. No queue for the changing room, no stock pulled off the floor.',
+        body: 'List your pieces in your Emode shop and they’re on the mirror. Shoppers tap one and see it on themselves, head to toe, in seconds — no phone needed, no changing-room queue.',
+    },
+    {
+        icon: <Store className="w-5 h-5" />,
+        title: 'Your store’s name on it',
+        body: 'The mirror welcomes shoppers to Emode Mirror at your store, with your logo.',
     },
     {
         icon: <Layers className="w-5 h-5" />,
@@ -40,8 +46,8 @@ const POINTS = [
     },
     {
         icon: <BarChart3 className="w-5 h-5" />,
-        title: 'Know what gets tried',
-        body: 'We report visits, looks and the pieces people reach for, per mirror — counted without keeping anyone’s photo.',
+        title: 'Your own dashboard',
+        body: 'Visits, looks, the pieces people reach for most and whether each mirror is online — counted without keeping anyone’s photo.',
     },
     {
         icon: <ShieldCheck className="w-5 h-5" />,
