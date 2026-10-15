@@ -64,6 +64,3 @@ export const SHOPIFY_APP_STORE_URL = 'https://apps.shopify.com/emode-tryon';
  * testing) rather than a page-by-page hunt.
  */
 export const TESTFLIGHT_URL = 'https://testflight.apple.com/join/MsphXM51';
-
-// Emode Mirror on the visitor's own phone or laptop (repo: Emode-App/emode-mirror).
-export const MIRROR_TRY_URL = 'https://mirror.emode.style/try';
